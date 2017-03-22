@@ -5,7 +5,6 @@ classdef ThorCam < handle
         ImageHeight;
         ImageBits;
         MemID;
-        isCapturing=0;
         pos2pix_transform;
         pix2pos_transform;
     end
@@ -42,22 +41,11 @@ classdef ThorCam < handle
             [~,obj.ImageWidth,obj.ImageHeight,obj.ImageBits,~] = obj.camObj.Memory.Inquire(obj.MemID);
         end
         
-        function obj = start(obj)
-            obj.camObj.Acquisition.Capture;
-            disp('Camera started');
-            obj.isCapturing = 1;
-        end
-        
-        function obj = stop(obj)
-            obj.camObj.Acquisition.Stop;
-            disp('Camera stopped');
-            obj.isCapturing = 0;
-        end
-        
         function img = getFrame(obj)
+            obj.camObj.Acquisition.Freeze(uc480.Defines.DeviceParameter.Wait); %wait for complete image 
             [~,tmp] = obj.camObj.Memory.CopyToArray(obj.MemID);
             img = reshape(tmp.uint8,obj.ImageWidth,obj.ImageHeight);
-            img = fliplr(img');
+            img = fliplr(img'); %<- change image mirroring/rotation here
         end
         
         function Continuous(obj)
@@ -74,6 +62,14 @@ classdef ThorCam < handle
             %TODO
             %image processing to find pixel position of peaks, and then use
             %calibrated transformations to get the position in real space
+            
+            %In the mean time just show image, and click on the location
+            img = obj.getFrame;
+            imshow(img);
+            title('Click on centre of dot');
+            [pix_x,pix_y]=ginput(1); 
+            
+            pos = obj.pix2pos([pix_x pix_y]);
         end
         
         function obj = calib(obj)
@@ -83,10 +79,6 @@ classdef ThorCam < handle
             [pos_y,pos_x] = meshgrid([-1 0 1]);
             pos_x = pos_x(:);
             pos_y = pos_y(:);
-            
-            if obj.isCapturing==0
-                obj.start;
-            end
             
             img = obj.getFrame;
             imshow(img); hold on;
