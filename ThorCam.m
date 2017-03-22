@@ -5,6 +5,7 @@ classdef ThorCam < handle
         ImageHeight;
         ImageBits;
         MemID;
+%         isCapturing;
         pos2pix_transform;
         pix2pos_transform;
     end
@@ -15,7 +16,8 @@ classdef ThorCam < handle
             %Need to install the .dll file to the Global Assembly Cache
             %util 'gacutil -i C:\Program Files\Thorlabs\Scientific
             %Imaging\DCx Camera Support\Develop\DotNet\signed\uc480DotNet.dll
-            NET.addAssembly('uc480DotNet');
+%             NET.addAssembly('uc480DotNet');
+            NET.addAssembly('C:\Program Files\Thorlabs\Scientific Imaging\DCx Camera Support\Develop\DotNet\uc480DotNet.dll');
 %             import uc480DotNet.*
 %             
             %Create camera object
@@ -40,17 +42,27 @@ classdef ThorCam < handle
             %Extract image width/height/bits
             [~,obj.ImageWidth,obj.ImageHeight,obj.ImageBits,~] = obj.camObj.Memory.Inquire(obj.MemID);
         end
+%         
+%         function start(obj)
+%             obj.isCapturing = 1;
+%             obj.camObj.Acquisition.Capture;
+%         end
+%         
+%         function stop(obj)
+%             obj.isCapturing = 0;
+%             obj.camObj.Acquisition.Stop;
+%         end
         
         function img = getFrame(obj)
-            obj.camObj.Acquisition.Freeze(uc480.Defines.DeviceParameter.Wait); %wait for complete image 
+            obj.camObj.Acquisition.Freeze(uc480.Defines.DeviceParameter.Wait); 
             [~,tmp] = obj.camObj.Memory.CopyToArray(obj.MemID);
             img = reshape(tmp.uint8,obj.ImageWidth,obj.ImageHeight);
-            img = fliplr(img'); %<- change image mirroring/rotation here
+%             img = fliplr(img'); %<- change image mirroring/rotation here
         end
         
         function Continuous(obj)
             for i = 1:200
-                obj.getFrame;
+                imshow(obj.getFrame);
             end
         end
         
@@ -76,7 +88,7 @@ classdef ThorCam < handle
             %Calib pixel position to real position, requires displaying a
             %grid
             
-            [pos_y,pos_x] = meshgrid([-1 0 1]);
+            [pos_y,pos_x] = meshgrid(-2:1:2);
             pos_x = pos_x(:);
             pos_y = pos_y(:);
             

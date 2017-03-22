@@ -17,7 +17,7 @@ classdef GalvoController < handle
             obj.AOY = obj.daqSession.addAnalogOutputChannel('Dev1', 1, 'Voltage');
         end
         
-        function setV(v)
+        function setV(obj,v)
             %single-scan
             obj.daqSession.outputSingleScan(v);
         end
@@ -25,7 +25,7 @@ classdef GalvoController < handle
         function calib_VtoX(obj,ThorCam)
             %Use grid paper marking mm
             
-            V_in = -3:0.5:3;
+            V_in = -1:1:1;
             [Vy,Vx] = meshgrid(V_in);
             Vx = Vx(:);
             Vy = Vy(:);
@@ -46,28 +46,59 @@ classdef GalvoController < handle
             end
             
             [~,~,obj.x2v_transform] = procrustes([Vx Vy],pos);
+            obj.x2v_transform.c = mean(obj.x2v_transform.c,1);
         end
         
-        function calib_XtoS(obj,ThorCam)
-            %calibrate realPos to stereotaxis pos according to bregma +
-            %lambda
+        function v=pos2v(obj,pos)
+            if isempty(obj.x2v_transform)
+                error('need to calibrate');
+            end
+            v = bsxfun(@plus,obj.x2v_transform.b * pos * obj.x2v_transform.T, obj.x2v_transform.c);
+        end
+        
+        function interact(obj,ThorCam)
+            imshow(ThorCam.getFrame);
             
-            %Get bregma position
-            bregPos = ThorCam.getStimPos;
+            while 1==1
+                pos = ThorCam.getStimPos;
+                obj.setV(obj.pos2v(pos));
+                pause(0.5);
+            end
+        end
+        
+        function scan(obj)
+            %scan galvo between multiple points rapidly
+            pos = [-1 -1;
+                1 1;
+                 0 0];
             
-            %get lambda pos
-            lambdaPos = ThorCam.getStimPos;
+            v = obj.pos2v(pos);
+            numDots = size(pos,1);
             
+            freq = 40*numDots; %40Hz at each location, so in total the scanning should be at 40*n Hz
+
+            obj.daqSession.Rate = 20e3;
+
+            numSamplesOneCycle = obj.daqSession.Rate/freq;
+            numSamplesPerSite = round(numSamplesOneCycle/numDots);
             
-            %derive translation and rotation transformations
-            %
+            waveX = reshape(repmat(pos(:,1),1,numSamplesPerSite)',[],1);
+            waveY = reshape(repmat(pos(:,2),1,numSamplesPerSite)',[],1);
+
+            nCycles = 200;
+
+            obj.daqSession.queueOutputData(repmat([waveX, waveY],nCycles,1));
+            tic
+            obj.daqSession.startForeground;
+            toc
+            obj.daqSession.stop;
+
         end
         
         
-        
-        function MCLISTENER
+        function delete(obj)
+            delete(obj.daqSession);
         end
-        
     end
     
 end
