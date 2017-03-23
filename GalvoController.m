@@ -75,18 +75,24 @@ classdef GalvoController < handle
             v = obj.pos2v(pos);
             numDots = size(pos,1);
             
-            freq = 40*numDots; %40Hz at each location, so in total the scanning should be at 40*n Hz
-
-            obj.daqSession.Rate = 20e3;
-
-            numSamplesOneCycle = obj.daqSession.Rate/freq;
-            numSamplesPerSite = round(numSamplesOneCycle/numDots);
+            LED_freq = 40*numDots; %we want 40Hz laser at each location, therefore laser needs to output 40*n Hz if multiple sites
             
-            waveX = reshape(repmat(pos(:,1),1,numSamplesPerSite)',[],1);
-            waveY = reshape(repmat(pos(:,2),1,numSamplesPerSite)',[],1);
-
+            obj.daqSession.Rate = 20e3; %sample rate processed on the DAQ
+            
+            %galvo needs to place the laser at each location for the length
+            %of the LED's single cycle. 
+            
+            LED_dt = 1/LED_freq; %the amount of time taken for the LED to cycle once
+            Rate_dt = 1/obj.daqSession.Rate; %the amount of time taken for the DAQ to read one sample
+            
+            %the number of DAQ samples required to cover one LED cycle
+            numSamples = round(LEDdt/Rate_dt); %which corresponds to the number of samples the galvo should position the laser at each site
+            
+            
+            waveX = reshape(repmat(v(:,1),1,numSamples)',[],1);
+            waveY = reshape(repmat(v(:,2),1,numSamples)',[],1);
+            
             nCycles = 200;
-
             obj.daqSession.queueOutputData(repmat([waveX, waveY],nCycles,1));
             tic
             obj.daqSession.startForeground;
