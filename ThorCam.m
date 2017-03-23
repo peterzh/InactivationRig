@@ -8,34 +8,35 @@ classdef ThorCam < handle
         isCapturing;
         pos2pix_transform;
         pix2pos_transform;
+        
+        vidAx;
+        vidTimer;
+
     end
     
     methods
         function obj = ThorCam %Create and initialise camera
             %Add NET assembly
+            
             %Need to install the .dll file to the Global Assembly Cache
             %util 'gacutil -i C:\Program Files\Thorlabs\Scientific
             %Imaging\DCx Camera Support\Develop\DotNet\signed\uc480DotNet.dll
-%             NET.addAssembly('uc480DotNet');
+            %             NET.addAssembly('uc480DotNet');
             NET.addAssembly('C:\Program Files\Thorlabs\Scientific Imaging\DCx Camera Support\Develop\DotNet\uc480DotNet.dll');
-%             import uc480DotNet.*
-%             
-            %Create camera object
+            %             import uc480DotNet.*
+            %
+            
             obj.camObj = uc480.Camera;
             
             %Initialise object addressed with ID ( default 0)
-            obj.camObj.Init(0); 
+            obj.camObj.Init(0)
             
             %Set display mode
-            obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Direct3D);
-            obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Mono);
+            obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Direct3D)
+            obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Mono)
             
             %Set color mode to RGB 8bit
-%             obj.camObj.PixelFormat.Set(uc480.Defines.ColorMode.RGBA8Packed);
-            obj.camObj.PixelFormat.Set(uc480.Defines.ColorMode.Mono8);
-            
-            %Set camera trigger to software
-%             obj.camObj.Trigger.Set(uc480.Defines.TriggerMode.Software);
+            obj.camObj.PixelFormat.Set(uc480.Defines.ColorMode.Mono8)
             
             %Allocate memory for camera image
             [~,obj.MemID] = obj.camObj.Memory.Allocate(true);
@@ -43,34 +44,66 @@ classdef ThorCam < handle
             %Extract image width/height/bits
             [~,obj.ImageWidth,obj.ImageHeight,obj.ImageBits,~] = obj.camObj.Memory.Inquire(obj.MemID);
         end
-     
+        
         function start(obj)
             obj.isCapturing = 1;
-            obj.camObj.Acquisition.Capture(uc480.Defines.DeviceParameter.Wait);
+            %             obj.camObj.Acquisition.Capture(uc480.Defines.DeviceParameter.Wait);
+            obj.camObj.Acquisition.Capture;
             
-            %try displaying to figure?
-            obj.camObj.Display(obj.MemID,ax,uc480.Defines.DisplayRenderMode.FitToWindow);
+            [~,fps]=obj.camObj.Timing.Framerate.GetCurrentFps;
+            [~,fpsrange]=obj.camObj.Timing.Framerate.GetFrameRateRange;
+            disp(['frames per second: ' num2str(fps) '   min:' num2str(fpsrange.Minimum) ' max:' num2str(fpsrange.Maximum)]);
+            
+            
+            [~,exposure]=obj.camObj.Timing.Exposure.Get;
+            [~,exposurerange]=obj.camObj.Timing.Exposure.GetRange;
+            disp(['exposure: ' num2str(exposure) '   min:' num2str(exposurerange.Minimum) ' max:' num2str(exposurerange.Maximum)]);
+            
+            
+            %            %create timer object to keep updating the image in the
+            %            %background
+            figure('color','g');
+            axes;
+            obj.vidAx = gca;
+            set(obj.vidAx,'xtick','','ytick','','box','off','xcolor','w','ycolor','w');
+            
+            obj.vidTimer = timer;
+            obj.vidTimer.TimerFcn=@(tHandle,tEvents)(obj.timercallback);
+            obj.vidTimer.Period = 0.4;
+            obj.vidTimer.TasksToExecute = Inf;
+            obj.vidTimer.ExecutionMode = 'fixedRate';
+            start(obj.vidTimer);
+            
         end
 %         
         function stop(obj)
             obj.isCapturing = 0;
+            stop(obj.vidTimer);
             obj.camObj.Acquisition.Stop;
         end
         
         function img = getFrame(obj)
+            if obj.isCapturing == 0
+                obj.start;
+            end
 %             obj.camObj.Acquisition.Freeze(uc480.Defines.DeviceParameter.Wait); 
             [~,tmp] = obj.camObj.Memory.CopyToArray(obj.MemID);
             img = reshape(tmp.uint8,obj.ImageWidth,obj.ImageHeight);
         end
+
         
-        function Continuous(obj)
-            for i = 1:200
-                imshow(obj.getFrame);
-            end
+        function setGain(obj,index)
+            %index = 0-100;
+            [~,factor] = obj.camObj.Gain.Hardware.ConvertScaledToFactor.Master(index);
+            obj.camObj.Gain.Hardware.Factor.SetMaster(factor)
         end
         
-        function obj = setGain(obj)
-            %TODO
+        function setFps(obj,fps)
+            obj.camObj.Timing.Framerate.Set(fps)
+        end
+        
+        function setExposure(obj,exposure)
+            obj.camObj.Timing.Exposure.Set(exposure)
         end
         
         function pos = getStimPos(obj) %locate position of dot 
@@ -80,7 +113,9 @@ classdef ThorCam < handle
             
             %In the mean time just show image, and click on the location
             img = obj.getFrame;
-            imshow(img);
+            f=figure;
+            ax = axes('Parent',f);
+            image(img,'Parent',ax);
             title('Click on centre of dot');
             [pix_x,pix_y]=ginput(1); 
             
@@ -91,23 +126,26 @@ classdef ThorCam < handle
             %Calib pixel position to real position, requires displaying a
             %grid
             
-            [pos_y,pos_x] = meshgrid(-2:1:2);
+            [pos_y,pos_x] = meshgrid(-2:2:2);
             pos_x = pos_x(:);
             pos_y = pos_y(:);
             
+            f=figure;
+            ax = axes('Parent',f);
             img = obj.getFrame;
-            imshow(img); hold on;
-                        
+            image(img,'Parent',ax);
+            hold on;
+            
             pix_x = [];
             pix_y = [];
             for p = 1:length(pos_x);
-                title(['X=' num2str(pos_x(p)) '  Y=' num2str(pos_y(p))]);
-                [pix_x(p,1),pix_y(p,1)]=ginput(1); 
+                disp(['X=' num2str(pos_x(p)) '  Y=' num2str(pos_y(p))]);
+                [pix_x(p,1),pix_y(p,1)]=ginput(1);
                 plot(pix_x(p,1),pix_y(p,1),'ro');
                 tx=text(pix_x(p,1)+10,pix_y(p,1),num2str(p));
                 tx.Color = [1 0 0];
             end
-                       
+                    
             %procrustes analysis to find mapping from pixel space to
             %real position
             [~,tPos,obj.pos2pix_transform] = procrustes([pix_x,pix_y],[pos_x,pos_y]);
@@ -121,6 +159,7 @@ classdef ThorCam < handle
 
             obj.pix2pos_transform.c = mean(obj.pix2pos_transform.c,1);
             obj.pos2pix_transform.c = mean(obj.pos2pix_transform.c,1);
+            
         end
         
         function pos=pix2pos(obj,pix)
@@ -137,6 +176,13 @@ classdef ThorCam < handle
                 error('need to calibrate');
             end
             pix = bsxfun(@plus,obj.pos2pix_transform.b * pos * obj.pos2pix_transform.T, obj.pos2pix_transform.c);
+        end
+        
+        function timercallback(obj)
+            if obj.isCapturing == 1
+                img = obj.getFrame;
+                image(img,'Parent',obj.vidAx);
+            end
         end
         
         function delete(obj)
