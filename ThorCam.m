@@ -41,7 +41,7 @@ classdef ThorCam < handle
             obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Direct3D)
             obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Mono)
             
-            %Set color mode to RGB 8bit
+            %Set color mode to Mono 8bit
             obj.camObj.PixelFormat.Set(uc480.Defines.ColorMode.Mono8)
             
             %Allocate memory for camera image
@@ -124,7 +124,7 @@ classdef ThorCam < handle
             switch(mode)
                 case 'manual'
                     f=figure;
-                    ax = axes('Parent',f);
+                    ax = axes('Parent',f); axis equal;
                     image(img,'Parent',ax);
                     title('Select position');
                     [pix(1),pix(2)]=ginput(1);
@@ -137,7 +137,7 @@ classdef ThorCam < handle
                     [~,pix(1)]=max(mean(SmImg,2));
                     
                     f=figure;
-                    ax = axes('Parent',f);
+                    ax = axes('Parent',f); axis equal;
                     image(img,'Parent',ax); hold on;
                     h=plot(pix(1),pix(2),'ro'); h.MarkerSize=10;
                     
@@ -147,20 +147,25 @@ classdef ThorCam < handle
             pos = obj.pix2pos(pix);
         end
         
-        function obj = calibPIX2POS(obj)
+        function calibPIX2POS(obj)
             %Calib pixel position to real position, requires displaying a
-            %grid
+            %grid. This can be done only once, and calibration saved. As
+            %long as the setup isn't modified physically
             
+            %create grid of points in REAL space
             [pos_y,pos_x] = meshgrid(-2:2:2);
             pos_x = pos_x(:);
             pos_y = pos_y(:);
             
+            %create figure and plot camera image
             f=figure;
             ax = axes('Parent',f);
             img = obj.getFrame;
             image(img,'Parent',ax);
             hold on;
             
+            %Go through each point in REAL SPACE, and identify the
+            %associated point in PIXEL SPACE
             pix_x = [];
             pix_y = [];
             for p = 1:length(pos_x);
@@ -171,24 +176,27 @@ classdef ThorCam < handle
                 tx.Color = [1 0 0];
             end
                     
-            %procrustes analysis to find mapping from pixel space to
-            %real position
+            %procrustes analysis to find mapping from real space to pixel space 
             [~,tPos,obj.pos2pix_transform] = procrustes([pix_x,pix_y],[pos_x,pos_y]);
             
-            %overlay predicted position of real grid in the image
+            %overlay predicted pixel-space positions of real-space grid 
             plot(tPos(:,1),tPos(:,2),'gs');
             tx=text(tPos(:,1)+10,tPos(:,2),cellfun(@num2str,num2cell(1:length(pos_x)),'uniformoutput',0));
             set(tx,'Color',[0 1 0]);
                  
+            %procrustes analysis to find mapping from pixel space to real space 
             [~,~,obj.pix2pos_transform] = procrustes([pos_x,pos_y],[pix_x,pix_y]);
 
+            %collapsing the offset (c) transform because for some reason
+            %the procrustes function outputs repeat values for the offset
             obj.pix2pos_transform.c = mean(obj.pix2pos_transform.c,1);
             obj.pos2pix_transform.c = mean(obj.pos2pix_transform.c,1);
             
         end
         
-        function obj = calibPIX2STE(obj)
-            %Calibrate pixel position to stereotaxic coords
+        function calibPIX2STE(obj)
+            %Calibrate pixel position to stereotaxic coords. Need to do
+            %this everytime you headfix
             
             %get 'real pos' of bregma and lambda, requires PIX2POS calib
             %already
@@ -204,7 +212,13 @@ classdef ThorCam < handle
             disp('SELECT LAMBDA');
             lambdaPos = obj.getStimPos('manual');
             
-            delta = bregmaPos-lambdaPos;
+            delta = bregmaPos-lambdaPos; 
+            delta = delta/norm(delta);
+%             
+%             [~, ~, obj.pos2ste_transform] = procrustes([0 0; 0 -1], [bregmaPos; bregmaPos-delta],'Scaling',false,'Reflection',false);
+%             [~, ~, obj.ste2pos_transform] = procrustes([bregmaPos-delta; delta],[0 0; 0 -1],'Scaling',false,'Reflection',false);
+%             obj.pos2ste_transform.c = mean(obj.pos2ste_transform.c,1);
+%             obj.ste2pos_transform.c = mean(obj.ste2pos_transform.c,1);
             
             angle_to_Yaxis = acos( dot(delta,[0 1])/norm(delta) );
             
@@ -230,7 +244,7 @@ classdef ThorCam < handle
             %plot REAL SPACE grid
             img = obj.getFrame;
             f=figure;
-            image(img); hold on;
+            image(img); hold on; axis equal;
             
             dots = -2:0.5:2;
             [x,y] = meshgrid(dots); x=x(:); y=y(:);
@@ -238,7 +252,7 @@ classdef ThorCam < handle
             plot(pix(:,1),pix(:,2),'ko');
           
             %plot STEREOTAXIC grid
-            pos = bsxfun(@plus,[x,y]*obj.ste2pos_transform.rotation',obj.ste2pos_transform.offset);
+            pos = obj.ste2pos([x,y]);
             pix = obj.pos2pix(pos);
             plot(pix(:,1),pix(:,2),'go');
             
@@ -267,6 +281,8 @@ classdef ThorCam < handle
             end
             
             pos = bsxfun(@plus,ste*obj.ste2pos_transform.rotation',obj.ste2pos_transform.offset);
+            
+            %             pos = bsxfun(@plus,obj.ste2pos_transform.b * ste * obj.ste2pos_transform.T, obj.ste2pos_transform.c);
         end
         
         function ste=pos2ste(obj,pos)
@@ -276,6 +292,7 @@ classdef ThorCam < handle
             end
             
             ste = bsxfun(@plus,pos*obj.pos2ste_transform.rotation',obj.pos2ste_transform.offset);
+            %             ste = bsxfun(@plus,obj.pos2ste_transform.b * pos * obj.pos2ste_transform.T, obj.pos2ste_transform.c);
         end
         
         function timercallback(obj)
