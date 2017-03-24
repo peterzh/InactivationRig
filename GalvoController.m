@@ -13,8 +13,8 @@ classdef GalvoController < handle
             obj.daqSession = daq.createSession('ni');
             obj.daqDevices = daq.getDevices;
             
-            obj.AOX = obj.daqSession.addAnalogOutputChannel('Dev1', 0, 'Voltage');
-            obj.AOY = obj.daqSession.addAnalogOutputChannel('Dev1', 1, 'Voltage');
+            obj.AOX = obj.daqSession.addAnalogOutputChannel('Dev2', 0, 'Voltage');
+            obj.AOY = obj.daqSession.addAnalogOutputChannel('Dev2', 1, 'Voltage');
         end
         
         function setV(obj,v)
@@ -41,8 +41,8 @@ classdef GalvoController < handle
                 
                 %Use camera to determine the real position of the laser
                 %dot. Camera must be calibrated already
-                pause(0.5);
-                pos(p,:) = ThorCam.getStimPos;
+                pause(0.5); %allow time for laser to move and new image to enter camera memory
+                pos(p,:) = ThorCam.getStimPos('auto');
             end
             
             [~,~,obj.x2v_transform] = procrustes([Vx Vy],pos);
@@ -57,25 +57,40 @@ classdef GalvoController < handle
         end
         
         function interact(obj,ThorCam)
-            imshow(ThorCam.getFrame);
+            disp('Exit by pressing q');
             
-            while 1==1
-                pos = ThorCam.getStimPos;
+            f=figure;
+            ax = axes('Parent',f);
+            while 1 == 1
+                img = ThorCam.getFrame;
+                image(img,'Parent',ax);
+                [pix_x,pix_y,button] = ginput(1);
+                
+                if button==113 %q button
+                    break;
+                end
+                
+                pos = ThorCam.pix2pos([pix_x pix_y]);
                 obj.setV(obj.pos2v(pos));
+                disp(['X=' num2str(pos(1)) ' Y=' num2str(pos(2))]);
+                
                 pause(0.5);
             end
+    
         end
         
-        function scan(obj)
+        function scan(obj,totalTime)
             %scan galvo between multiple points rapidly
-            pos = [-1 -1;
-                1 1;
-                 0 0];
+            pos = [3 0;
+                -3 0];
+%                  0 0;
+%                 2 2];
             
             v = obj.pos2v(pos);
             numDots = size(pos,1);
             
             LED_freq = 40*numDots; %we want 40Hz laser at each location, therefore laser needs to output 40*n Hz if multiple sites
+%             LED_freq = 100*numDots;
             
             obj.daqSession.Rate = 20e3; %sample rate processed on the DAQ
             
@@ -86,19 +101,29 @@ classdef GalvoController < handle
             Rate_dt = 1/obj.daqSession.Rate; %the amount of time taken for the DAQ to read one sample
             
             %the number of DAQ samples required to cover one LED cycle
-            numSamples = round(LEDdt/Rate_dt); %which corresponds to the number of samples the galvo should position the laser at each site
+            numSamples = round(LED_dt/Rate_dt); %which corresponds to the number of samples the galvo should position the laser at each site
             
             
             waveX = reshape(repmat(v(:,1),1,numSamples)',[],1);
             waveY = reshape(repmat(v(:,2),1,numSamples)',[],1);
             
-            nCycles = 200;
-            obj.daqSession.queueOutputData(repmat([waveX, waveY],nCycles,1));
-            tic
-            obj.daqSession.startForeground;
-            toc
-            obj.daqSession.stop;
+            totalNumSamples = obj.daqSession.Rate * totalTime;
+            nCycles = round(totalNumSamples/length(waveX));
+            
+            V_IN = repmat([waveX, waveY],nCycles,1);
+            
+            %add 1 sample on the end to bring the laser back to zero
+            V_IN = [V_IN; obj.pos2v([0 0])];
+            
+            obj.daqSession.queueOutputData(V_IN);
+            obj.daqSession.startBackground;
+%             toc
+%             obj.daqSession.stop;
 
+        end
+        
+        function stop(obj)
+            obj.daqSession.stop;
         end
         
         
