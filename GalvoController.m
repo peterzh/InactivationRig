@@ -4,7 +4,7 @@ classdef GalvoController < handle
         daqDevices;
         AOX; %analogue out channel X
         AOY; %analogue out channel Y
-        x2v_transform; %transforms real position to volts
+        pos2volt_transform; %transforms real position to volts
     end
     
     methods
@@ -46,7 +46,7 @@ classdef GalvoController < handle
             end
             
             [~,~,obj.pos2volt_transform] = procrustes([Vx Vy],pos);
-            obj.pos2volt_transform.c = mean(obj.x2v_transform.c,1);
+            obj.pos2volt_transform.c = mean(obj.pos2volt_transform.c,1);
         end
         
         function v=pos2v(obj,pos)
@@ -81,16 +81,14 @@ classdef GalvoController < handle
         
         function scan(obj,totalTime)
             %scan galvo between multiple points rapidly
-            pos = [3 0;
-                -3 0];
-%                  0 0;
-%                 2 2];
+            x = [-2:1:2];
+            y = -x;
+            pos = [x' y'];
             
             v = obj.pos2v(pos);
             numDots = size(pos,1);
             
             LED_freq = 40*numDots; %we want 40Hz laser at each location, therefore laser needs to output 40*n Hz if multiple sites
-%             LED_freq = 100*numDots;
             
             obj.daqSession.Rate = 20e3; %sample rate processed on the DAQ
             
@@ -115,10 +113,9 @@ classdef GalvoController < handle
             %add 1 sample on the end to bring the laser back to zero
             V_IN = [V_IN; obj.pos2v([0 0])];
             
+            %issue voltage trace to analogue-out channels
             obj.daqSession.queueOutputData(V_IN);
             obj.daqSession.startBackground;
-%             toc
-%             obj.daqSession.stop;
 
         end
         

@@ -55,13 +55,8 @@ classdef ThorCam < handle
             
             %try loading pix2pos calibration
             try
-                
-                disp('loaded pix2pos calibration. Dated ...');
-                d = dir('*.mat');
-                [~,dx] = sort([d.datenum]);
-                newest = d(dx(1)).name;
-                
-                
+                obj.loadcalibPIX2POS; 
+                disp('Loaded pix-pos calibration');
             catch
                 disp('did not load pix2pos calibration');
             end
@@ -93,7 +88,6 @@ classdef ThorCam < handle
             [~,exposure]=obj.camObj.Timing.Exposure.Get;
             [~,exposurerange]=obj.camObj.Timing.Exposure.GetRange;
             disp(['exposure: ' num2str(exposure) '   min:' num2str(exposurerange.Minimum) ' max:' num2str(exposurerange.Maximum)]);
-            
         end
 %         
         function stop(obj)
@@ -150,7 +144,7 @@ classdef ThorCam < handle
                     %auto detect ONE bright peak
                     SmImg = imgaussfilt(img,20);
                     [~,pix(1)]=max(mean(SmImg,1));
-                    [~,pix(1)]=max(mean(SmImg,2));
+                    [~,pix(2)]=max(mean(SmImg,2));
                     
                     f=figure;
                     ax = axes('Parent',f); axis equal;
@@ -208,10 +202,16 @@ classdef ThorCam < handle
             obj.pix2pos_transform.c = mean(obj.pix2pos_transform.c,1);
             obj.pos2pix_transform.c = mean(obj.pos2pix_transform.c,1);
             
-            filename = ['calib_pix2pos_' date '.mat'];
-            t = {obj.pix2pos_transform,obj.pos2pix_transform};
-            save(filename,'t');
-            
+            pix2pos_transform=obj.pix2pos_transform;
+            pos2pix_transform=obj.pos2pix_transform;
+            filename = ['./calib/calib_PIX-POS_' date '.mat'];
+            save(filename,'pix2pos_transform','pos2pix_transform');
+        end
+        
+        function loadcalibPIX2POS(obj)
+            t = load('C:\Users\Peter\Desktop\InactivationRig\calib\calib_PIX-POS_27-Mar-2017.mat');
+            obj.pix2pos_transform = t.pix2pos_transform;
+            obj.pos2pix_transform = t.pos2pix_transform;
         end
         
         function calibPIX2STE(obj)
@@ -225,9 +225,6 @@ classdef ThorCam < handle
             end
             disp('SELECT BREGMA');
             bregmaPos = obj.getStimPos('manual');
-
-            obj.pos2ste_transform.offset = -bregmaPos; 
-            obj.ste2pos_transform.offset = bregmaPos;
             
             disp('SELECT LAMBDA');
             lambdaPos = obj.getStimPos('manual');
@@ -246,6 +243,8 @@ classdef ThorCam < handle
             
             %Since angle is unsigned, need to define whether this vector is
             %rotated clockwise or anticlockwise relative to Y axis
+            obj.pos2ste_transform.offset = -bregmaPos; 
+            obj.ste2pos_transform.offset = bregmaPos;
             if delta(1) > 0
                 %clockwise relative to Y axis
                 
@@ -320,6 +319,7 @@ classdef ThorCam < handle
         function timercallback(obj)
             img = obj.getFrame;
             image(img,'Parent',obj.vidAx);
+            set(gca,'XLimMode','manual','YLimMode','manual','DataAspectRatio',[1 1 1],'PlotBoxAspectRatio',[3 4 4]);
             if obj.isCapturing == 1
                 set(get(obj.vidAx,'parent'),'color','g');
                 title(obj.vidAx,{['update rate: ' num2str(1/obj.vidTimer.AveragePeriod)],...
@@ -329,9 +329,9 @@ classdef ThorCam < handle
                 set(get(obj.vidAx,'parent'),'color','r')
             end
             
-            %if pix2pos calibration done, overlay real position grid
+%             %if pix2pos calibration done, overlay real position grid
             if ~isempty(obj.pos2pix_transform)
-                pos = -4:2:4;
+                pos = -4:1:4;
                 [x,y]=meshgrid(pos);
                 pix = obj.pos2pix([x(:) y(:)]);
 %                 hold on;
@@ -341,16 +341,16 @@ classdef ThorCam < handle
                 pix_x = pix(:,1); pix_y = pix(:,2);
                 pix_x = reshape(pix_x,length(pos),length(pos));
                 pix_y = reshape(pix_y,length(pos),length(pos));
-                hold on;
-                plot(pix_x,pix_y,'wo:');
-                plot(pix_x',pix_y','wo:');
-                h=plot(pix(ceil(end/2),1),pix(ceil(end/2),2),'wo'); h.markersize=10;
-                hold off;
+                hold(obj.vidAx,'on');
+                plot(obj.vidAx,pix_x,pix_y,'ko:');
+                plot(obj.vidAx,pix_x',pix_y','ko:');
+                h=plot(obj.vidAx,pix(ceil(end/2),1),pix(ceil(end/2),2),'ko'); set(h,'MarkerSize',20);
+                hold(obj.vidAx,'off');
             end
-            
+          
             %if ste2pos calibration done, overlay stereotaxic grid
             if ~isempty(obj.ste2pos_transform)
-                ste = -4:2:4;
+                ste = -2:1:2;
                 [x,y]=meshgrid(ste);
                 pos = obj.ste2pos([x(:) y(:)]);
                 pix = obj.pos2pix(pos);
@@ -361,10 +361,11 @@ classdef ThorCam < handle
                 pix_x = pix(:,1); pix_y = pix(:,2);
                 pix_x = reshape(pix_x,length(ste),length(ste));
                 pix_y = reshape(pix_y,length(ste),length(ste));
-                hold on;
-                plot(pix_x,pix_y,'ro:');
-                plot(pix_x',pix_y','ro:');
-                hold off;
+                hold(obj.vidAx,'on');
+                plot(obj.vidAx,pix_x,pix_y,'bo-');
+                plot(obj.vidAx,pix_x',pix_y','bo-');
+                h=plot(obj.vidAx,pix(ceil(end/2),1),pix(ceil(end/2),2),'bo'); set(h,'MarkerSize',20);
+                hold(obj.vidAx,'off');
             end
             
         end
