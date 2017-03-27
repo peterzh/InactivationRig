@@ -22,7 +22,7 @@ classdef GalvoController < handle
             obj.daqSession.outputSingleScan(v);
         end
         
-        function calib_VtoX(obj,ThorCam)
+        function calibPOS2VOLTAGE(obj,ThorCam)
             %Use grid paper marking mm
             
             V_in = -1:1:1;
@@ -45,15 +45,15 @@ classdef GalvoController < handle
                 pos(p,:) = ThorCam.getStimPos('auto');
             end
             
-            [~,~,obj.x2v_transform] = procrustes([Vx Vy],pos);
-            obj.x2v_transform.c = mean(obj.x2v_transform.c,1);
+            [~,~,obj.pos2volt_transform] = procrustes([Vx Vy],pos);
+            obj.pos2volt_transform.c = mean(obj.x2v_transform.c,1);
         end
         
         function v=pos2v(obj,pos)
-            if isempty(obj.x2v_transform)
+            if isempty(obj.pos2volt_transform)
                 error('need to calibrate');
             end
-            v = bsxfun(@plus,obj.x2v_transform.b * pos * obj.x2v_transform.T, obj.x2v_transform.c);
+            v = bsxfun(@plus,obj.pos2volt_transform.b * pos * obj.pos2volt_transform.T, obj.pos2volt_transform.c);
         end
         
         function interact(obj,ThorCam)

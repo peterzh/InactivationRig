@@ -344,6 +344,7 @@ classdef ThorCam < handle
                 hold on;
                 plot(pix_x,pix_y,'wo:');
                 plot(pix_x',pix_y','wo:');
+                h=plot(pix(ceil(end/2),1),pix(ceil(end/2),2),'wo'); h.markersize=10;
                 hold off;
             end
             
@@ -361,8 +362,8 @@ classdef ThorCam < handle
                 pix_x = reshape(pix_x,length(ste),length(ste));
                 pix_y = reshape(pix_y,length(ste),length(ste));
                 hold on;
-                plot(pix_x,pix_y,'wo:');
-                plot(pix_x',pix_y','wo:');
+                plot(pix_x,pix_y,'ro:');
+                plot(pix_x',pix_y','ro:');
                 hold off;
             end
             
