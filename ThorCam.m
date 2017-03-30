@@ -50,13 +50,14 @@ classdef ThorCam < handle
             %Extract image width/height/bits
             [~,obj.ImageWidth,obj.ImageHeight,obj.ImageBits,~] = obj.camObj.Memory.Inquire(obj.MemID);
             
-            %load video feed
+            %video feed
             obj.videoFigure;
+            obj.start;
             
             %try loading pix2pos calibration
             try
                 obj.loadcalibPIX2POS; 
-                disp('Loaded pix-pos calibration');
+                disp('Loaded pixel<->position calibration');
             catch
                 disp('did not load pix2pos calibration');
             end
@@ -142,16 +143,29 @@ classdef ThorCam < handle
 
                 case 'auto'
                     %auto detect ONE bright peak
-                    SmImg = imgaussfilt(img,20);
-                    [~,pix(1)]=max(mean(SmImg,1));
-                    [~,pix(2)]=max(mean(SmImg,2));
+                    s = regionprops(img>240,'centroid');
+                    f=figure; imshow(img); hold on;
+                    plot(s(end).Centroid(1),s(end).Centroid(2),'r+');
+                    hold off;
                     
-                    f=figure;
-                    ax = axes('Parent',f); axis equal;
-                    image(img,'Parent',ax); hold on;
-                    h=plot(pix(1),pix(2),'ro'); h.MarkerSize=10;
+                    pix=[s(end).Centroid(1),s(end).Centroid(2)];
                     
+%                     SmImg = imgaussfilt(img,20);
+%                     [~,pix(1)]=max(mean(SmImg,1));
+%                     [~,pix(2)]=max(mean(SmImg,2));
+%                     
+%                     f=figure;
+%                     ax = axes('Parent',f); axis equal;
+%                     image(img,'Parent',ax); hold on;
+%                     h=plot(pix(1),pix(2),'ro'); h.MarkerSize=10;
+%                     
+                    %allow user to manually correct the calibration
                     pause(2);
+                    key = get(f,'CurrentKey');
+                    if ~strcmp(key,'0')
+                        [pix(1),pix(2)]=ginput(1);
+                    end
+                    
                     close(f);
             end
             pos = obj.pix2pos(pix);
@@ -204,12 +218,12 @@ classdef ThorCam < handle
             
             pix2pos_transform=obj.pix2pos_transform;
             pos2pix_transform=obj.pos2pix_transform;
-            filename = ['./calib/calib_PIX-POS_' date '.mat'];
+            filename = ['./calib/calib_PIX-POS_.mat'];
             save(filename,'pix2pos_transform','pos2pix_transform');
         end
         
         function loadcalibPIX2POS(obj)
-            t = load('C:\Users\Peter\Desktop\InactivationRig\calib\calib_PIX-POS_27-Mar-2017.mat');
+            t = load('C:\Users\Peter\Desktop\InactivationRig\calib\calib_PIX-POS.mat');
             obj.pix2pos_transform = t.pix2pos_transform;
             obj.pos2pix_transform = t.pos2pix_transform;
         end
@@ -319,7 +333,7 @@ classdef ThorCam < handle
         function timercallback(obj)
             img = obj.getFrame;
             image(img,'Parent',obj.vidAx);
-            set(gca,'XLimMode','manual','YLimMode','manual','DataAspectRatio',[1 1 1],'PlotBoxAspectRatio',[3 4 4]);
+            set(obj.vidAx,'XLimMode','manual','YLimMode','manual','DataAspectRatio',[1 1 1],'PlotBoxAspectRatio',[3 4 4]);
             if obj.isCapturing == 1
                 set(get(obj.vidAx,'parent'),'color','g');
                 title(obj.vidAx,{['update rate: ' num2str(1/obj.vidTimer.AveragePeriod)],...

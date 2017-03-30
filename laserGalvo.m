@@ -4,9 +4,17 @@ classdef laserGalvo < handle
     properties
         thorcam;
         galvo;
-        
+                
         expServerObj;
         coordList;
+        
+        LED_daqSession;
+        LEDch;
+        
+        monitor_daqSession;
+        monitor_led;
+        monitor_gx;
+        monitor_gy;
     end
     
     methods
@@ -17,6 +25,50 @@ classdef laserGalvo < handle
             
             %Get galvo controller object
             obj.galvo = GalvoController;
+            
+            %Add LED output channels to the galvo session
+            obj.LED_daqSession = daq.createSession('ni');
+            obj.LEDch = obj.LED_daqSession.addCounterOutputChannel('Dev2', 'ctr0', 'PulseGeneration');
+            obj.LED_daqSession.IsContinuous=1;
+
+            obj.monitor_daqSession = daq.createSession('ni');
+            obj.monitor_daqSession.Rate = 60e3;
+            obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev2', 'ai1', 'Voltage');
+            obj.monitor_gx = obj.monitor_daqSession.addAnalogInputChannel('Dev2', 'ai3', 'Voltage');
+            obj.monitor_gy = obj.monitor_daqSession.addAnalogInputChannel('Dev2', 'ai2', 'Voltage');
+            
+            obj.monitor_led.TerminalConfig = 'SingleEnded';
+            obj.monitor_gx.TerminalConfig = 'SingleEnded';
+            obj.monitor_gy.TerminalConfig = 'SingleEnded';
+%             keyboard;
+
+        end
+        
+        function monitor(obj)
+            
+            %set monitoring to trigger when there is a pulse on PFI0
+            try
+                obj.monitor_daqSession.addTriggerConnection('external', 'Dev2/PFI2', 'StartTrigger');
+            catch
+            end
+            obj.monitor_daqSession.DurationInSeconds = 3;
+            
+            
+            tDelays = linspace(0.3/1000,0.8/1000,3);
+%             
+            figure;
+            for i = 1:length(tDelays)
+%                 obj.scan(1,tDelays(i));
+                obj.scan(3);
+                data = obj.monitor_daqSession.startForeground;
+                
+                tAxis = (0:length(data)-1)/obj.monitor_daqSession.Rate;
+                
+                h(i)=subplot(length(tDelays),1,i);
+                plot(tAxis, data); ylabel(num2str(tDelays(i)));
+                obj.stop;
+            end
+            linkaxes(h,'x');
         end
         
         function calibStereotaxic(obj)
@@ -48,43 +100,128 @@ classdef laserGalvo < handle
                 pause(0.5);
             end
             
+            
+            
         end
         
-        function scan(obj,totalTime)
-            %scan galvo between multiple points rapidly
-            x = [-2:1:2];
-            y = -x;
-            pos = [x' y'];
+        function scan(obj,pos,totalTime)
+            %scan galvo between multiple points rapidly used for bilateral
+            %inactivation
             
+%             pos = [2 2;
+%                    2 -2;
+%                    -2 -2;
+%                    -2 2];
+%             
             v = obj.galvo.pos2v(pos);
-            numDots = size(pos,1);
             
-            LED_freq = 40*numDots; %we want 40Hz laser at each location, therefore laser needs to output 40*n Hz if multiple sites
+%             v = [-1 -1; 1 1; 0 2; 0 3];
+            numDots = size(v,1);
             
-            DAQ_Rate = 20e3; %sample rate processed on the DAQ
+            %Setup LED stimulation
+            obj.LEDch.Frequency = 40*numDots; %we want 40Hz laser at each location, therefore laser needs to output 40*n Hz if multiple sites
+            obj.LEDch.DutyCycle = 0.90;
+            
+%             DAQ_Rate = numSamples*obj.LEDch.Frequency; %sample rate processed on the galvo DAQ session
+            obj.galvo.daqSession.Rate = 20e3;
+            DAQ_Rate = obj.galvo.daqSession.Rate; %get back real rate
             
             %galvo needs to place the laser at each location for the length
             %of the LED's single cycle.
+            t = [0:(1/DAQ_Rate):totalTime]; t(1)=[];
             
-            LED_dt = 1/LED_freq; %the amount of time taken for the LED to cycle once
-            Rate_dt = 1/DAQ_Rate; %the amount of time taken for the DAQ to read one sample
+            waveX = nan(size(t));
+            waveY = nan(size(t));
+
+            for d = 1:numDots
+                idx = square(2*pi*obj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
+                waveX(idx) = v(d,1);
+                waveY(idx) = v(d,2);
+            end
             
-            %the number of DAQ samples required to cover one LED cycle
-            numSamples = round(LED_dt/Rate_dt); %which corresponds to the number of samples the galvo should position the laser at each site
+            V_IN = [waveX' waveY'];
             
-            waveX = reshape(repmat(v(:,1),1,numSamples)',[],1);
-            waveY = reshape(repmat(v(:,2),1,numSamples)',[],1);
+            %Register the trigger for galvo and LEDs
+            try
+                obj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
+%                 obj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
+            catch
+            end
             
-            totalNumSamples = DAQ_Rate * totalTime;
-            nCycles = round(totalNumSamples/length(waveX));
+            %Trim galvo waveform to ensure galvos move slightly earlier
+            %compare to the LED waveform
+            LED_dt = 1/obj.LEDch.Frequency; %the amount of time taken for the LED to cycle once
+            galvoDelay = 0.3/1000; %0.4ms delay required to move the galvos
+            delay = 0.5*(1-obj.LEDch.DutyCycle)*LED_dt + galvoDelay;
+            trimSamples = round(DAQ_Rate * delay);
+            V_IN = circshift(V_IN,-trimSamples);
             
-            V_IN = repmat([waveX, waveY],nCycles,1);
             
-            %add 1 sample on the end to bring the laser back to zero
-            V_IN = [V_IN; obj.galvo.pos2v([0 0])];
             
-            %issue voltage trace to analogue-out channels
-            obj.galvo.issueWaveform(V_IN,DAQ_Rate);
+            %issue voltage trace to analogue-out channels of galvo
+            obj.galvo.issueWaveform(V_IN);
+
+            %start laser background
+            obj.LED_daqSession.startBackground;
+            
+            obj.galvo.daqSession.wait();
+            obj.stop;
+        end
+        
+        function scanOnePos(obj,pos,totalTime)
+            %UNFINISHED 
+            
+            
+            %Move galvos between all sites in POS but only illuminate the
+            %laser on the first of them
+            v = obj.galvo.pos2v(pos);
+            numDots = size(v,1);
+            
+            obj.galvo.daqSession.Rate = 20e3;
+            DAQ_Rate = obj.galvo.daqSession.Rate; %get back real rate
+            
+            t = [0:(1/DAQ_Rate):totalTime]; t(1)=[];
+            
+            waveX = nan(size(t));
+            waveY = nan(size(t));
+            
+            obj.LEDch.Frequency = 40*numDots;
+            
+            for d = 1:numDots
+                idx = square(2*pi*obj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
+                waveX(idx) = v(d,1);
+                waveY(idx) = v(d,2);
+            end
+            
+            V_IN = [waveX' waveY'];
+            
+            %Trim galvo waveform to ensure galvos move slightly earlier
+            %compare to the LED waveform
+            LED_dt = 1/obj.LEDch.Frequency;
+            galvoDelay = 0.3/1000; %0.4ms delay required to move the galvos
+            delay = 0.5*(1-obj.LEDch.DutyCycle)*LED_dt + galvoDelay;
+            trimSamples = round(DAQ_Rate * delay);
+            V_IN = circshift(V_IN,-trimSamples);
+
+            %Register the trigger for galvo and LEDs
+            try
+                obj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
+                %                 obj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
+            catch
+            end
+            
+            
+            obj.LEDch.Frequency = 40;
+            obj.LEDch.DutyCycle = obj.LEDch.DutyCycle/numDots; 
+            
+            %issue voltage trace to analogue-out channels of galvo
+            obj.galvo.issueWaveform(V_IN);
+            
+            %start laser background
+            obj.LED_daqSession.startBackground;
+            
+            obj.galvo.daqSession.wait();
+            obj.stop;
         end
         
         function registerListener(obj)
@@ -119,9 +256,18 @@ classdef laserGalvo < handle
             end
         end
         
+        function stop(obj)
+            obj.LED_daqSession.stop;
+            obj.galvo.daqSession.stop;
+            obj.monitor_daqSession.stop;
+            
+        end
+        
         function delete(obj)
             obj.thorcam.delete;
             obj.galvo.delete;
+            delete(obj.LED_daqSession);
+            delete(obj.monitor_daqSession);
         end
         
     end

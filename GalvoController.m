@@ -15,6 +15,14 @@ classdef GalvoController < handle
             
             obj.AOX = obj.daqSession.addAnalogOutputChannel('Dev2', 0, 'Voltage');
             obj.AOY = obj.daqSession.addAnalogOutputChannel('Dev2', 1, 'Voltage');
+            
+            %try loading pos2volt calibration
+            try
+                obj.loadcalibPOS2VOLT; 
+                disp('Loaded position<->voltage calibration');
+            catch
+                disp('did not load calibration');
+            end
         end
         
         function setV(obj,v)
@@ -49,6 +57,10 @@ classdef GalvoController < handle
             
             [~,~,obj.pos2volt_transform] = procrustes([Vx Vy],pos);
             obj.pos2volt_transform.c = mean(obj.pos2volt_transform.c,1);
+            
+            pos2volt_transform = obj.pos2volt_transform;
+            filename = ['./calib/calib_POS-VOLT.mat'];
+            save(filename,'pos2volt_transform');
         end
         
         function v=pos2v(obj,pos)
@@ -58,14 +70,18 @@ classdef GalvoController < handle
             v = bsxfun(@plus,obj.pos2volt_transform.b * pos * obj.pos2volt_transform.T, obj.pos2volt_transform.c);
         end
         
-        function issueWaveform(obj,V_IN,rate)
-            obj.daqSession.Rate = rate;
+        function issueWaveform(obj,V_IN)
             obj.daqSession.queueOutputData(V_IN);
             obj.daqSession.startBackground;
         end
         
         function stop(obj)
             obj.daqSession.stop;
+        end
+        
+        function loadcalibPOS2VOLT(obj)
+            t = load('C:\Users\Peter\Desktop\InactivationRig\calib\calib_POS-VOLT.mat');
+            obj.pos2volt_transform = t.pos2volt_transform;
         end
         
         function delete(obj)
