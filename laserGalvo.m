@@ -85,6 +85,7 @@ classdef laserGalvo < handle
             
             obj.probLaser = probabilityOfLaser; %probability of trial being a laser trial
             
+            obj.log = struct;
         end
         
         function monitor(obj)
@@ -375,6 +376,12 @@ classdef laserGalvo < handle
                                 lobj.LED_daqSession.startBackground; %<will wait for trigger from expServer
                             end
                             
+                            %populate log fields here, get needed details from
+                            %eventObj
+                            %                     lObj.log.trialNumber = eventObj.?
+                            lObj.log.laser(lObj.log.trialNumber) = laserON;
+                            lObj.log.laserpos(lObj.log.trialNumber) = newCoordIndex;
+                            
                     end
                     
                     
@@ -383,6 +390,11 @@ classdef laserGalvo < handle
                     
                     pause(1.5);
                     lObj.stop;
+                    
+                    %populate log fields here, get needed details from
+                    %eventObj
+                    lObj.log.coordList = lObj.coordList;
+                    lObj.log.mode = lObj.mode;
                     
                     lObj.saveLog();
                     
