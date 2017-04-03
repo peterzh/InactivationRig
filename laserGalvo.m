@@ -7,6 +7,7 @@ classdef laserGalvo < handle
                 
         expServerObj;
         coordList;
+        probLaser; %probability of a laser trial
         
         LED_daqSession;
         LEDch;
@@ -15,6 +16,13 @@ classdef laserGalvo < handle
         monitor_led;
         monitor_gx;
         monitor_gy;
+        
+        mode;
+        mouseName;
+        expNum;
+        expDate;
+        log;
+        filepath;
     end
     
     methods
@@ -40,8 +48,43 @@ classdef laserGalvo < handle
             obj.monitor_led.TerminalConfig = 'SingleEnded';
             obj.monitor_gx.TerminalConfig = 'SingleEnded';
             obj.monitor_gy.TerminalConfig = 'SingleEnded';
-%             keyboard;
+            
+            try
+                obj.registerListener;
+            catch
+                warning('Failed to register expServer listener');
+            end
+            
+            disp('Please run stereotaxic calibration');
+        end
+        
+        function configureExpt(obj,mode,coordinates,probabilityOfLaser)
+            modes = {'unilateral_static','unilateral_scan','bilateral_scan'};
+            m = strcmp(mode,modes);
+            
+            if ~any(m==1)
+                error('not possible');
+            end
 
+            obj.mode = mode;
+                        
+            switch(coordinates)
+                case 'allSites'
+                    obj.coordList = fliplr([...
+                        -4*ones(8,1) (-3.5:3.5)'; ...
+                        -3*ones(8,1) (-3.5:3.5)'; ...
+                        -2*ones(8,1) (-3.5:3.5)'; ...
+                        -1*ones(8,1) (-3.5:3.5)'; ...
+                        0*ones(8,1) (-3.5:3.5)'; ...
+                        1*ones(6,1) (-2.5:2.5)'; ...
+                        2*ones(4,1) (-1.5:1.5)'; ...
+                        3*ones(2,1) (-0.5:0.5)']);
+                otherwise
+                    error('invalid coordinate profile');
+            end
+            
+            obj.probLaser = probabilityOfLaser; %probability of trial being a laser trial
+            
         end
         
         function monitor(obj)
@@ -164,13 +207,17 @@ classdef laserGalvo < handle
             %start laser background
             obj.LED_daqSession.startBackground;
             
-            obj.galvo.daqSession.wait();
-            obj.stop;
+%             obj.galvo.daqSession.wait();
+%             obj.stop;
         end
         
-        function scanOnePos(obj,pos,totalTime)
-            %UNFINISHED 
+        function scanOnePos(obj,pos,totalTime) 
+            if size(pos,1)>1
+                error('only specify one position!');
+            end
             
+            %add a 2nd point which is the contralateral partner
+            pos = [pos; -pos(1) pos(2)];
             
             %Move galvos between all sites in POS but only illuminate the
             %laser on the first of them
@@ -186,6 +233,7 @@ classdef laserGalvo < handle
             waveY = nan(size(t));
             
             obj.LEDch.Frequency = 40*numDots;
+            obj.LEDch.DutyCycle = 0.90;
             
             for d = 1:numDots
                 idx = square(2*pi*obj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
@@ -220,37 +268,128 @@ classdef laserGalvo < handle
             %start laser background
             obj.LED_daqSession.startBackground;
             
-            obj.galvo.daqSession.wait();
-            obj.stop;
         end
         
         function registerListener(obj)
             %Connect to expServer, registering a callback function
             s = srv.StimulusControl.create(getExpServerName());
             s.connect(true);
-            anonListen = @(srcObj, eventObj) obj.GalvoListener(eventObj, obj);
+            anonListen = @(srcObj, eventObj) obj.LaserGalvoListener(eventObj, obj);
             addlistener(s, 'ExpUpdate', anonListen);
             obj.expServerObj = s;
         end
         
-        function GalvoListener(eventObj, galvoObj)
+        function LaserGalvoListener(eventObj, lObj)
             if strcmp(eventObj.Data{1}, 'event')
+                %if experiment just started
+                if strcmp(eventObj.Data{2}, 'experimentInit')
+                    
+                    %setup some experiment details and log file location
+                    [lObj.mouseName, lObj.expDate, lObj.expNum] = dat.parseExpRef(eventObj.Ref);
+                    p = dat.expPath(lObj.mouseName, lObj.expDate, lObj.expNum, 'expInfo');
+                    lObj.filePath = fullfile(p{1}, [eventObj.Ref '_laserManip.mat']);
+                    mkdir(p{1});
                 
-                %if stimulus started
-                if strcmp(eventObj.Data{2}, 'stimulusCueStarted')
+                    %
+                % if trial started, preload waveforms (laser on/off, galvo
+                % positions, laser power)
+                elseif strcmp(eventObj.Data{2}, 'trialStarted')
+                    laserON = binornd(1,lObj.probLaser); %laser on: yes/no?
+                    newCoordIndex = randi(size(lObj.coordList),1); %galvo position ID
+                    %laserPOWER = ? % get from expServer parameters
                     
-                    %wait 1.5sec for laser to be on
+                    
+                    %different behaviour depending on the experiment type
+                    switch(lObj.mode)
+                        case 'unilateral_static'
+                            %Just place the galvo at the location now, and
+                            %then trigger the laser output by the TTL pulse
+                            %(if laser should be on)
+                            pos = lObj.coordList(newCoordIndex,:);
+                            lObj.galvo.setV(lObj.galvo.pos2v(pos));
+                            
+                            if laserON==1
+                                %todo: specify laser power
+                                lObj.LEDch.Frequency = 40;
+                                lObj.LEDch.DutyCycle = 0.9;
+                                lObj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
+                                lObj.LED_daqSession.startBackground;
+                            end
+                            
+                        case {'bilateral_scan','unilateral_scan'}
+                            pos = lObj.coordList(newCoordIndex,:);
+                            totalTime = 1.5;
+                            
+                            %add a 2nd point which is the contralateral partner
+                            pos = [pos; -pos(1) pos(2)];
+                            
+                            %Move galvos between all sites in POS 
+                            v = lObj.galvo.pos2v(pos);
+                            numDots = 2;
+                            
+                            lObj.galvo.daqSession.Rate = 20e3;
+                            DAQ_Rate = lObj.galvo.daqSession.Rate; %get back real rate
+                            
+                            t = [0:(1/DAQ_Rate):totalTime]; t(1)=[];
+                            
+                            waveX = nan(size(t));
+                            waveY = nan(size(t));
+                            
+                            lObj.LEDch.Frequency = 40*numDots;
+                            lObj.LEDch.DutyCycle = 0.90;
+                            
+                            for d = 1:numDots
+                                idx = square(2*pi*lObj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
+                                waveX(idx) = v(d,1);
+                                waveY(idx) = v(d,2);
+                            end
+                            
+                            V_IN = [waveX' waveY'];
+                            
+                            %Trim galvo waveform to ensure galvos move slightly earlier
+                            %compare to the LED waveform
+                            LED_dt = 1/lObj.LEDch.Frequency;
+                            galvoDelay = 0.3/1000; %0.4ms delay required to move the galvos
+                            delay = 0.5*(1-lObj.LEDch.DutyCycle)*LED_dt + galvoDelay;
+                            trimSamples = round(DAQ_Rate * delay);
+                            V_IN = circshift(V_IN,-trimSamples);
+                            
+                            %if unilateral scan, then only illuminate on
+                            %one cycle
+                            switch(lObj.mode)
+                                case 'unilateral_scan'
+                                    lObj.LEDch.Frequency = 40;
+                                    lObj.LEDch.DutyCycle = lObj.LEDch.DutyCycle/numDots;
+                            end
+                            
+                            %Register the trigger for galvo and initiate
+                            %waveform wait period
+                            lObj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
+                            lObj.galvo.issueWaveform(V_IN);
+                            
+                            %if laser trial, then set that trigger too
+                            if laserON==1
+                                %todo: specify laser power
+                                lObj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
+                                lobj.LED_daqSession.startBackground;
+                            end
+                            
+                    end
+                    
+
+                %turn off laser+galvo 1.5sec after visual stimulus
+                elseif strcmp(eventObj.Data{2}, 'stimulusCueStarted')
+                    
                     pause(1.5);
+                    lObj.stop;
                     
-                    %after, move the galvo to the next location (ONLY
-                    %UNILATERAL INACTIVATION)
-                    numCoords = size(galvoObj.coordList, 1);
-                    newCoordIndex = randi(numCoords,1);
-                    v = galvoObj.pos2v(galvoObj.coordList(newCoordIndex,:));
+                    %remove triggers (%might throw error if trigger was not
+                    %registered, e.g. when laserON==0);
+                    lObj.LED_daqSession.removeConnection(1);
+                    lObj.galvo.daqSession.removeConnection(1);
                     
-                    tic
-                    galvoObj.setV(v)
-                    toc
+                    
+                    lObj.saveLog();
                 end
                 
             end
@@ -261,6 +400,11 @@ classdef laserGalvo < handle
             obj.galvo.daqSession.stop;
             obj.monitor_daqSession.stop;
             
+        end
+        
+         function saveLog(obj)
+            log = obj.log;
+            save(obj.filePath, 'log');        
         end
         
         function delete(obj)
