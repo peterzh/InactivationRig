@@ -289,10 +289,14 @@ classdef laserGalvo < handle
                     p = dat.expPath(lObj.mouseName, lObj.expDate, lObj.expNum, 'expInfo');
                     lObj.filePath = fullfile(p{1}, [eventObj.Ref '_laserManip.mat']);
                     mkdir(p{1});
-                
+                    
+                    %register triggers for the LED and galvos
+                    lObj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
+                    lObj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
+                    
                     %
-                % if trial started, preload waveforms (laser on/off, galvo
-                % positions, laser power)
+                    % if trial started, preload waveforms (laser on/off, galvo
+                    % positions, laser power)
                 elseif strcmp(eventObj.Data{2}, 'trialStarted')
                     laserON = binornd(1,lObj.probLaser); %laser on: yes/no?
                     newCoordIndex = randi(size(lObj.coordList),1); %galvo position ID
@@ -312,8 +316,7 @@ classdef laserGalvo < handle
                                 %todo: specify laser power
                                 lObj.LEDch.Frequency = 40;
                                 lObj.LEDch.DutyCycle = 0.9;
-                                lObj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
-                                lObj.LED_daqSession.startBackground;
+                                lObj.LED_daqSession.startBackground; %<will wait for trigger from expServer
                             end
                             
                         case {'bilateral_scan','unilateral_scan'}
@@ -323,7 +326,7 @@ classdef laserGalvo < handle
                             %add a 2nd point which is the contralateral partner
                             pos = [pos; -pos(1) pos(2)];
                             
-                            %Move galvos between all sites in POS 
+                            %Move galvos between all sites in POS
                             v = lObj.galvo.pos2v(pos);
                             numDots = 2;
                             
@@ -364,32 +367,30 @@ classdef laserGalvo < handle
                             
                             %Register the trigger for galvo and initiate
                             %waveform wait period
-                            lObj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
-                            lObj.galvo.issueWaveform(V_IN);
+                            lObj.galvo.issueWaveform(V_IN); %<will wait for trigger from expServer
                             
-                            %if laser trial, then set that trigger too
+                            %if laser trial, then queue that too
                             if laserON==1
                                 %todo: specify laser power
-                                lObj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
-                                lobj.LED_daqSession.startBackground;
+                                lobj.LED_daqSession.startBackground; %<will wait for trigger from expServer
                             end
                             
                     end
                     
-
-                %turn off laser+galvo 1.5sec after visual stimulus
+                    
+                    %turn off laser+galvo 1.5sec after visual stimulus
                 elseif strcmp(eventObj.Data{2}, 'stimulusCueStarted')
                     
                     pause(1.5);
                     lObj.stop;
                     
+                    lObj.saveLog();
+                    
+                elseif strcmp(eventObj.Data{2}, 'experimentEnded')
                     %remove triggers (%might throw error if trigger was not
                     %registered, e.g. when laserON==0);
                     lObj.LED_daqSession.removeConnection(1);
                     lObj.galvo.daqSession.removeConnection(1);
-                    
-                    
-                    lObj.saveLog();
                 end
                 
             end
