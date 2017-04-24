@@ -2,6 +2,7 @@ classdef laserGalvo < handle
     %object which handles interfacing the galvo setup with MC
     
     properties
+        device='Dev1';
         thorcam;
         galvo;
                 
@@ -32,18 +33,18 @@ classdef laserGalvo < handle
             obj.thorcam = ThorCam;
             
             %Get galvo controller object
-            obj.galvo = GalvoController;
+            obj.galvo = GalvoController(obj.device);
             
             %Add LED output channels to the galvo session
             obj.LED_daqSession = daq.createSession('ni');
-            obj.LEDch = obj.LED_daqSession.addCounterOutputChannel('Dev2', 'ctr0', 'PulseGeneration');
+            obj.LEDch = obj.LED_daqSession.addCounterOutputChannel('Dev1', 'ctr0', 'PulseGeneration');
             obj.LED_daqSession.IsContinuous=1;
 
             obj.monitor_daqSession = daq.createSession('ni');
             obj.monitor_daqSession.Rate = 60e3;
-            obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev2', 'ai1', 'Voltage');
-            obj.monitor_gx = obj.monitor_daqSession.addAnalogInputChannel('Dev2', 'ai3', 'Voltage');
-            obj.monitor_gy = obj.monitor_daqSession.addAnalogInputChannel('Dev2', 'ai2', 'Voltage');
+            obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai1', 'Voltage');
+            obj.monitor_gx = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai3', 'Voltage');
+            obj.monitor_gy = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai2', 'Voltage');
             
             obj.monitor_led.TerminalConfig = 'SingleEnded';
             obj.monitor_gx.TerminalConfig = 'SingleEnded';
@@ -187,8 +188,8 @@ classdef laserGalvo < handle
             
             %Register the trigger for galvo and LEDs
             try
-                obj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
-%                 obj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
+                obj.galvo.daqSession.addTriggerConnection('external', 'Dev1/PFI0', 'StartTrigger');
+                obj.LED_daqSession.addTriggerConnection('external', 'Dev1/PFI1', 'StartTrigger');
             catch
             end
             
@@ -208,8 +209,8 @@ classdef laserGalvo < handle
             %start laser background
             obj.LED_daqSession.startBackground;
             
-%             obj.galvo.daqSession.wait();
-%             obj.stop;
+            obj.galvo.daqSession.wait();
+            obj.stop;
         end
         
         function scanOnePos(obj,pos,totalTime) 
@@ -273,141 +274,13 @@ classdef laserGalvo < handle
         
         function registerListener(obj)
             %Connect to expServer, registering a callback function
-            s = srv.StimulusControl.create(getExpServerName());
+            s = srv.StimulusControl.create('zym2');
             s.connect(true);
-            anonListen = @(srcObj, eventObj) obj.LaserGalvoListener(eventObj, obj);
+            anonListen = @(srcObj, eventObj) laserGalvo_callback(eventObj, obj);
             addlistener(s, 'ExpUpdate', anonListen);
             obj.expServerObj = s;
         end
-        
-        function LaserGalvoListener(eventObj, lObj)
-            if strcmp(eventObj.Data{1}, 'event')
-                %if experiment just started
-                if strcmp(eventObj.Data{2}, 'experimentInit')
-                    
-                    %setup some experiment details and log file location
-                    [lObj.mouseName, lObj.expDate, lObj.expNum] = dat.parseExpRef(eventObj.Ref);
-                    p = dat.expPath(lObj.mouseName, lObj.expDate, lObj.expNum, 'expInfo');
-                    lObj.filePath = fullfile(p{1}, [eventObj.Ref '_laserManip.mat']);
-                    mkdir(p{1});
-                    
-                    %register triggers for the LED and galvos
-                    lObj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
-                    lObj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
-                    
-                    %
-                    % if trial started, preload waveforms (laser on/off, galvo
-                    % positions, laser power)
-                elseif strcmp(eventObj.Data{2}, 'trialStarted')
-                    laserON = binornd(1,lObj.probLaser); %laser on: yes/no?
-                    newCoordIndex = randi(size(lObj.coordList),1); %galvo position ID
-                    %laserPOWER = ? % get from expServer parameters
-                    
-                    
-                    %different behaviour depending on the experiment type
-                    switch(lObj.mode)
-                        case 'unilateral_static'
-                            %Just place the galvo at the location now, and
-                            %then trigger the laser output by the TTL pulse
-                            %(if laser should be on)
-                            pos = lObj.coordList(newCoordIndex,:);
-                            lObj.galvo.setV(lObj.galvo.pos2v(pos));
-                            
-                            if laserON==1
-                                %todo: specify laser power
-                                lObj.LEDch.Frequency = 40;
-                                lObj.LEDch.DutyCycle = 0.9;
-                                lObj.LED_daqSession.startBackground; %<will wait for trigger from expServer
-                            end
-                            
-                        case {'bilateral_scan','unilateral_scan'}
-                            pos = lObj.coordList(newCoordIndex,:);
-                            totalTime = 1.5;
-                            
-                            %add a 2nd point which is the contralateral partner
-                            pos = [pos; -pos(1) pos(2)];
-                            
-                            %Move galvos between all sites in POS
-                            v = lObj.galvo.pos2v(pos);
-                            numDots = 2;
-                            
-                            lObj.galvo.daqSession.Rate = 20e3;
-                            DAQ_Rate = lObj.galvo.daqSession.Rate; %get back real rate
-                            
-                            t = [0:(1/DAQ_Rate):totalTime]; t(1)=[];
-                            
-                            waveX = nan(size(t));
-                            waveY = nan(size(t));
-                            
-                            lObj.LEDch.Frequency = 40*numDots;
-                            lObj.LEDch.DutyCycle = 0.90;
-                            
-                            for d = 1:numDots
-                                idx = square(2*pi*lObj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
-                                waveX(idx) = v(d,1);
-                                waveY(idx) = v(d,2);
-                            end
-                            
-                            V_IN = [waveX' waveY'];
-                            
-                            %Trim galvo waveform to ensure galvos move slightly earlier
-                            %compare to the LED waveform
-                            LED_dt = 1/lObj.LEDch.Frequency;
-                            galvoDelay = 0.3/1000; %0.4ms delay required to move the galvos
-                            delay = 0.5*(1-lObj.LEDch.DutyCycle)*LED_dt + galvoDelay;
-                            trimSamples = round(DAQ_Rate * delay);
-                            V_IN = circshift(V_IN,-trimSamples);
-                            
-                            %if unilateral scan, then only illuminate on
-                            %one cycle
-                            switch(lObj.mode)
-                                case 'unilateral_scan'
-                                    lObj.LEDch.Frequency = 40;
-                                    lObj.LEDch.DutyCycle = lObj.LEDch.DutyCycle/numDots;
-                            end
-                            
-                            %Register the trigger for galvo and initiate
-                            %waveform wait period
-                            lObj.galvo.issueWaveform(V_IN); %<will wait for trigger from expServer
-                            
-                            %if laser trial, then queue that too
-                            if laserON==1
-                                %todo: specify laser power
-                                lobj.LED_daqSession.startBackground; %<will wait for trigger from expServer
-                            end
-                            
-                            %populate log fields here, get needed details from
-                            %eventObj
-                            %                     lObj.log.trialNumber = eventObj.?
-                            lObj.log.laser(lObj.log.trialNumber) = laserON;
-                            lObj.log.laserpos(lObj.log.trialNumber) = newCoordIndex;
-                            
-                    end
-                    
-                    
-                    %turn off laser+galvo 1.5sec after visual stimulus
-                elseif strcmp(eventObj.Data{2}, 'stimulusCueStarted')
-                    
-                    pause(1.5);
-                    lObj.stop;
-                    
-                    %populate log fields here, get needed details from
-                    %eventObj
-                    lObj.log.coordList = lObj.coordList;
-                    lObj.log.mode = lObj.mode;
-                    
-                    lObj.saveLog();
-                    
-                elseif strcmp(eventObj.Data{2}, 'experimentEnded')
-                    %remove triggers (%might throw error if trigger was not
-                    %registered, e.g. when laserON==0);
-                    lObj.LED_daqSession.removeConnection(1);
-                    lObj.galvo.daqSession.removeConnection(1);
-                end
-                
-            end
-        end
-        
+
         function stop(obj)
             obj.LED_daqSession.stop;
             obj.galvo.daqSession.stop;

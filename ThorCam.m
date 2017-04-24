@@ -185,7 +185,7 @@ classdef ThorCam < handle
             f=figure;
             ax = axes('Parent',f);
             img = obj.getFrame;
-            image(img,'Parent',ax);
+            image(img,'Parent',ax); axis equal;
             hold on;
             
             %Go through each point in REAL SPACE, and define the
@@ -218,12 +218,12 @@ classdef ThorCam < handle
             
             pix2pos_transform=obj.pix2pos_transform;
             pos2pix_transform=obj.pos2pix_transform;
-            filename = ['./calib/calib_PIX-POS_.mat'];
+            filename = ['./calib/calib_PIX-POS.mat'];
             save(filename,'pix2pos_transform','pos2pix_transform');
         end
         
         function loadcalibPIX2POS(obj)
-            t = load('C:\Users\Peter\Desktop\InactivationRig\calib\calib_PIX-POS.mat');
+            t = load('./calib/calib_PIX-POS.mat');
             obj.pix2pos_transform = t.pix2pos_transform;
             obj.pos2pix_transform = t.pos2pix_transform;
         end

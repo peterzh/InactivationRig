@@ -9,12 +9,12 @@ classdef GalvoController < handle
     
     methods
         
-        function obj = GalvoController
+        function obj = GalvoController(device)
             obj.daqSession = daq.createSession('ni');
             obj.daqDevices = daq.getDevices;
             
-            obj.AOX = obj.daqSession.addAnalogOutputChannel('Dev2', 0, 'Voltage');
-            obj.AOY = obj.daqSession.addAnalogOutputChannel('Dev2', 1, 'Voltage');
+            obj.AOX = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
+            obj.AOY = obj.daqSession.addAnalogOutputChannel(device, 1, 'Voltage');
             
             %try loading pos2volt calibration
             try
@@ -80,7 +80,7 @@ classdef GalvoController < handle
         end
         
         function loadcalibPOS2VOLT(obj)
-            t = load('C:\Users\Peter\Desktop\InactivationRig\calib\calib_POS-VOLT.mat');
+            t = load('./calib/calib_POS-VOLT.mat');
             obj.pos2volt_transform = t.pos2volt_transform;
         end
         
