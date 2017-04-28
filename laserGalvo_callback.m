@@ -1,4 +1,4 @@
-function laserGalvoExpt_callback(eventObj, LGObj)
+function laserGalvo_callback(eventObj, LGObj)
 %callback function run by expServer, called with inputs:
     %eventObj: from expServer containing various information about a trial
     %LGObj: laserGalvo object containing functions for laser/galvo 
@@ -6,7 +6,7 @@ function laserGalvoExpt_callback(eventObj, LGObj)
 
 %TODO:
 %{
-1) PIP: TTL pulse to be delivered at start of stimulus
+1) PIP: TTL pulse isn't being delivered at the start of the stimulus
 
 2) ME: I should allow for different arrival times of variables
 
@@ -21,40 +21,36 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
 
     %START LOG FILE
     
-    %Start galvo rates
-    LGObj.galvo.daqSession.Rate = 20e3;
-    LGObj.laser.daqSession.Rate = 20e3;
-    
-    
     %Register triggers
-    LGObj.galvo.registerTrigger('Dev1/PFI0');
-    LGObj.laser.registerTrigger('Dev1/PFI0');
-%     
-% elseif isstruct(eventObj.Data) && ~any(strcmp({eventObj.Data.name},'events.buildWaveform')) 
-%     %If any variables in the eventObj field, update them
-%     names = {eventObj.Data.name};
-%     values = {eventObj.Data.value};
-%     
-%     if isempty(LGObj.galvoCoords)
-%             LGObj.galvoCoords = values{strcmp(names,'events.galvoCoords')};
-%             LGObj.thorcam.vidCustomCoords = LGObj.galvoCoords; %Send down to thorcam object for plotting
-%     end
-%     
+    LGObj.LED_daqSession.addTriggerConnection('external', 'Dev1/PFI1', 'StartTrigger');
+    LGObj.galvo.daqSession.addTriggerConnection('external', 'Dev1/PFI0', 'StartTrigger');
+
+    
+elseif isstruct(eventObj.Data) && ~any(strcmp({eventObj.Data.name},'events.buildWaveform')) 
+    %If any variables in the eventObj field, update them
+    names = {eventObj.Data.name};
+    values = {eventObj.Data.value};
+    
+    if isempty(LGObj.galvoCoords)
+            LGObj.galvoCoords = values{strcmp(names,'events.galvoCoords')};
+            LGObj.thorcam.vidCustomCoords = LGObj.galvoCoords; %Send down to thorcam object for plotting
+    end
+    
+    if any(strcmp(names,'events.trialNum')==1)
+        trialNum = values{strcmp(names,'events.trialNum')};
+    end
+    
+    if any(strcmp(names,'events.laserType')==1)
+        laserType = values{strcmp(names,'events.laserType')};
+    end
+    
 %     if any(strcmp(names,'events.trialNum')==1)
 %         trialNum = values{strcmp(names,'events.trialNum')};
 %     end
-%     
-%     if any(strcmp(names,'events.laserType')==1)
-%         laserType = values{strcmp(names,'events.laserType')};
-%     end
-%     
-% %     if any(strcmp(names,'events.trialNum')==1)
-% %         trialNum = values{strcmp(names,'events.trialNum')};
-% %     end
-%     %Check for each variable
-%     
-%     %Think about what happens AFTER buildWaveform is issued, it shouldn't
-%     %unnecesarrily overwrite fields
+    %Check for each variable
+    
+    %Think about what happens AFTER buildWaveform is issued, it shouldn't
+    %unnecesarrily overwrite fields
     
 elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTrial'))
     LGObj.stop;
@@ -91,13 +87,19 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         %Just place the galvo at the location now, and
         %then trigger the laser output by the TTL pulse
         %(if laser should be on)
-        ste = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
-
+        ste = LGObj.galvoCoords(abs(galvoPos),:);
+        
+        if sign(galvoPos) == 1 %RIGHT HEMISPHERE
+            %do nothing
+        elseif sign(galvoPos) == -1 %LEFT HEMISPHERE
+            ste(1) = -ste(1); %flip ML axis coordinate
+        end
+        
         disp(['stereoTaxic: ' num2str(ste(1)) ' ' num2str(ste(2))]);
         
         pos = LGObj.thorcam.ste2pos(ste);
         volt = LGObj.galvo.pos2v(pos);
-        LGObj.galvo.moveNow(volt);
+        LGObj.galvo.setV(volt);
         
         if laserType>1 %If laser ON
             %todo: specify laser power
@@ -110,8 +112,8 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     elseif galvoType == 2 % MULTI SCAN MODE
         %specify the galvo positions
         
-        ste = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
-        
+        ste = LGObj.galvoCoords(abs(galvoPos),:);
+        ste(1) = sign(galvoPos)*ste(1);
         %add the coordinate's mirror image
         ste = [ste; -ste(1), ste(2)];
         
@@ -195,8 +197,8 @@ elseif iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentEnded')
     LGObj.stop;
     
     %Remove triggers
-    LGObj.galvo.removeTrigger;
-    LGObj.laser.removeTrigger;
+    LGObj.LED_daqSession.removeConnection(1);
+    LGObj.galvo.daqSession.removeConnection(1);
 end
 
 end

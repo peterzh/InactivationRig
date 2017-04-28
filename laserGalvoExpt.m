@@ -37,13 +37,22 @@ classdef laserGalvoExpt < handle
             %Get galvo controller object
             obj.galvo = GalvoController(obj.galvoDevice);
             
+            %Get laser controller object
             obj.laser = LaserController(obj.laserDevice);
             
-%             %Add LED output channels to the galvo session
-%             obj.LED_daqSession = daq.createSession('ni');
-%             obj.LEDch = obj.LED_daqSession.addCounterOutputChannel('Dev1', 'ctr0', 'PulseGeneration');
-%             obj.LED_daqSession.IsContinuous=1;
-% 
+            %Ensure that both NI boards are synchronised
+            %"To achieve perfect synchronization, you must share both a trigger and a clock between your devices."
+            error('need to sync boards');
+            
+            obj.galvo.daqSession.addClockConnection('PFI1','external','ScanClock');
+            obj.laser.daqSession.addClockConnection('external','PFI1','ScanClock'); %laser DAQ session to receive clock from galvo daq
+            
+            
+            %Set equal rates
+            obj.galvo.daqSession.Rate = 20e3;
+            obj.laser.daqSession.Rate = 20e3;
+            
+            
 %             obj.monitor_daqSession = daq.createSession('ni');
 %             obj.monitor_daqSession.Rate = 60e3;
 %             obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai1', 'Voltage');
@@ -253,7 +262,7 @@ classdef laserGalvoExpt < handle
             %Connect to expServer, registering a callback function
             s = srv.StimulusControl.create('zym2');
             s.connect(true);
-            anonListen = @(srcObj, eventObj) laserGalvo_callback(eventObj, obj);
+            anonListen = @(srcObj, eventObj) laserGalvoExpt_callback(eventObj, obj);
             addlistener(s, 'ExpUpdate', anonListen);
             obj.expServerObj = s;
         end
@@ -261,7 +270,6 @@ classdef laserGalvoExpt < handle
         function stop(obj)
             obj.laser.stop;
             obj.galvo.stop;
-            
         end
         
          function saveLog(obj)
