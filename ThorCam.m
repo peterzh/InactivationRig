@@ -18,6 +18,7 @@ classdef ThorCam < handle
         %misc items related to live video feed 
         vidAx;
         vidTimer;
+        vidCustomCoords;
     end
     
     methods
@@ -363,14 +364,11 @@ classdef ThorCam < handle
             end
           
             %if ste2pos calibration done, overlay stereotaxic grid
-            if ~isempty(obj.ste2pos_transform)
+            if ~isempty(obj.ste2pos_transform) && isempty(obj.vidCustomCoords)
                 ste = -2:1:2;
                 [x,y]=meshgrid(ste);
                 pos = obj.ste2pos([x(:) y(:)]);
                 pix = obj.pos2pix(pos);
-%                 hold on;
-%                 plot(pix(:,1),pix(:,2),'w+');
-%                 hold off;
                 
                 pix_x = pix(:,1); pix_y = pix(:,2);
                 pix_x = reshape(pix_x,length(ste),length(ste));
@@ -379,6 +377,19 @@ classdef ThorCam < handle
                 plot(obj.vidAx,pix_x,pix_y,'bo-');
                 plot(obj.vidAx,pix_x',pix_y','bo-');
                 h=plot(obj.vidAx,pix(ceil(end/2),1),pix(ceil(end/2),2),'bo'); set(h,'MarkerSize',20);
+                hold(obj.vidAx,'off');
+            elseif ~isempty(obj.ste2pos_transform) && ~isempty(obj.vidCustomCoords)
+                ste = obj.vidCustomCoords;
+                ste = [ste; -ste(:,1) ste(:,2)];
+                pos = obj.ste2pos(ste);
+                pix = obj.pos2pix(pos);
+
+                pix_x = pix(:,1); pix_y = pix(:,2);
+%                 pix_x = reshape(pix_x,size(obj.vidCustomCoords,1),size(obj.vidCustomCoords,1));
+%                 pix_y = reshape(pix_y,size(obj.vidCustomCoords,1),size(obj.vidCustomCoords,1));
+                hold(obj.vidAx,'on');
+                plot(obj.vidAx,pix_x,pix_y,'bo');
+                plot(obj.vidAx,pix_x',pix_y','bo');
                 hold(obj.vidAx,'off');
             end
             

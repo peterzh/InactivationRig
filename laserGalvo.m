@@ -7,8 +7,7 @@ classdef laserGalvo < handle
         galvo;
                 
         expServerObj;
-        coordList;
-        probLaser; %probability of a laser trial
+        galvoCoords;
         
         LED_daqSession;
         LEDch;
@@ -50,13 +49,12 @@ classdef laserGalvo < handle
             obj.monitor_gx.TerminalConfig = 'SingleEnded';
             obj.monitor_gy.TerminalConfig = 'SingleEnded';
             
-            try
-                obj.registerListener;
-            catch
-                warning('Failed to register expServer listener');
-            end
-            
-            disp('Please run stereotaxic calibration');
+%             try
+%                 obj.registerListener;
+%             catch
+%                 warning('Failed to register expServer listener');
+%             end
+            disp('Please run stereotaxic calibration, then register listener');
         end
         
         function configureExpt(obj,mode,coordinates,probabilityOfLaser)
@@ -255,7 +253,7 @@ classdef laserGalvo < handle
 
             %Register the trigger for galvo and LEDs
             try
-                obj.galvo.daqSession.addTriggerConnection('external', 'Dev2/PFI0', 'StartTrigger');
+                obj.galvo.daqSession.addTriggerConnection('external', 'Dev1/PFI0', 'StartTrigger');
                 %                 obj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
             catch
             end
@@ -296,6 +294,7 @@ classdef laserGalvo < handle
         function delete(obj)
             obj.thorcam.delete;
             obj.galvo.delete;
+            obj.expServerObj.delete;
             delete(obj.LED_daqSession);
             delete(obj.monitor_daqSession);
         end
