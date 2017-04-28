@@ -25,12 +25,13 @@ classdef GalvoController < handle
             end
         end
         
-        function setV(obj,v)
-            %single-scan
+        function moveNow(obj,v)
             obj.daqSession.outputSingleScan(v);
         end
         
         function calibPOS2VOLTAGE(obj,ThorCam)
+            %Requires a ThorCam object for identifying the laser positions
+            
             %Use grid paper marking mm
             %Uses thor camera calibration to get measure of real position
             %of a laser dot
@@ -73,6 +74,14 @@ classdef GalvoController < handle
         function issueWaveform(obj,V_IN)
             obj.daqSession.queueOutputData(V_IN);
             obj.daqSession.startBackground;
+        end
+        
+        function registerTrigger(obj,pinID) %Any issued waveforms will wait for an input from this trigger
+            obj.daqSession.addTriggerConnection('external', pinID, 'StartTrigger');
+        end
+        
+        function removeTrigger(obj)
+            obj.daqSession.removeConnection(1);
         end
         
         function stop(obj)
