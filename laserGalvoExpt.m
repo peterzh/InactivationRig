@@ -1,22 +1,25 @@
-classdef laserGalvo < handle
+classdef laserGalvoExpt < handle
     %object which handles interfacing the galvo setup with MC
     
     properties
-        device='Dev1';
+        galvoDevice='Dev1';
+        laserDevice='Dev2';
+        
         thorcam;
         galvo;
+        laser;
                 
         expServerObj;
         galvoCoords;
         
-        LED_daqSession;
-        LEDch;
-        
-        monitor_daqSession;
-        monitor_led;
-        monitor_gx;
-        monitor_gy;
-        
+        %TO BE REMOVED
+%         LED_daqSession;
+%         LEDch;
+%         monitor_daqSession;
+%         monitor_led;
+%         monitor_gx;
+%         monitor_gy;
+%         
         mode;
         mouseName;
         expNum;
@@ -26,28 +29,30 @@ classdef laserGalvo < handle
     end
     
     methods
-        function obj = laserGalvo
+        function obj = laserGalvoExpt
             
             %Get camera object
             obj.thorcam = ThorCam;
             
             %Get galvo controller object
-            obj.galvo = GalvoController(obj.device);
+            obj.galvo = GalvoController(obj.galvoDevice);
             
-            %Add LED output channels to the galvo session
-            obj.LED_daqSession = daq.createSession('ni');
-            obj.LEDch = obj.LED_daqSession.addCounterOutputChannel('Dev1', 'ctr0', 'PulseGeneration');
-            obj.LED_daqSession.IsContinuous=1;
-
-            obj.monitor_daqSession = daq.createSession('ni');
-            obj.monitor_daqSession.Rate = 60e3;
-            obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai1', 'Voltage');
-            obj.monitor_gx = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai3', 'Voltage');
-            obj.monitor_gy = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai2', 'Voltage');
+            obj.laser = LaserController(obj.laserDevice);
             
-            obj.monitor_led.TerminalConfig = 'SingleEnded';
-            obj.monitor_gx.TerminalConfig = 'SingleEnded';
-            obj.monitor_gy.TerminalConfig = 'SingleEnded';
+%             %Add LED output channels to the galvo session
+%             obj.LED_daqSession = daq.createSession('ni');
+%             obj.LEDch = obj.LED_daqSession.addCounterOutputChannel('Dev1', 'ctr0', 'PulseGeneration');
+%             obj.LED_daqSession.IsContinuous=1;
+% 
+%             obj.monitor_daqSession = daq.createSession('ni');
+%             obj.monitor_daqSession.Rate = 60e3;
+%             obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai1', 'Voltage');
+%             obj.monitor_gx = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai3', 'Voltage');
+%             obj.monitor_gy = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai2', 'Voltage');
+%             
+%             obj.monitor_led.TerminalConfig = 'SingleEnded';
+%             obj.monitor_gx.TerminalConfig = 'SingleEnded';
+%             obj.monitor_gy.TerminalConfig = 'SingleEnded';
             
 %             try
 %                 obj.registerListener;
@@ -57,69 +62,43 @@ classdef laserGalvo < handle
             disp('Please run stereotaxic calibration, then register listener');
         end
         
-        function configureExpt(obj,mode,coordinates,probabilityOfLaser)
-            modes = {'unilateral_static','unilateral_scan','bilateral_scan'};
-            m = strcmp(mode,modes);
-            
-            if ~any(m==1)
-                error('not possible');
-            end
-
-            obj.mode = mode;
-                        
-            switch(coordinates)
-                case 'allSites'
-                    obj.coordList = fliplr([...
-                        -4*ones(8,1) (-3.5:3.5)'; ...
-                        -3*ones(8,1) (-3.5:3.5)'; ...
-                        -2*ones(8,1) (-3.5:3.5)'; ...
-                        -1*ones(8,1) (-3.5:3.5)'; ...
-                        0*ones(8,1) (-3.5:3.5)'; ...
-                        1*ones(6,1) (-2.5:2.5)'; ...
-                        2*ones(4,1) (-1.5:1.5)'; ...
-                        3*ones(2,1) (-0.5:0.5)']);
-                otherwise
-                    error('invalid coordinate profile');
-            end
-            
-            obj.probLaser = probabilityOfLaser; %probability of trial being a laser trial
-            
-            obj.log = struct;
-        end
-        
-        function monitor(obj)
-            
-            %set monitoring to trigger when there is a pulse on PFI0
-            try
-                obj.monitor_daqSession.addTriggerConnection('external', 'Dev2/PFI2', 'StartTrigger');
-            catch
-            end
-            obj.monitor_daqSession.DurationInSeconds = 3;
-            
-            
-            tDelays = linspace(0.3/1000,0.8/1000,3);
+%         function monitor(obj)
 %             
-            figure;
-            for i = 1:length(tDelays)
-%                 obj.scan(1,tDelays(i));
-                obj.scan(3);
-                data = obj.monitor_daqSession.startForeground;
-                
-                tAxis = (0:length(data)-1)/obj.monitor_daqSession.Rate;
-                
-                h(i)=subplot(length(tDelays),1,i);
-                plot(tAxis, data); ylabel(num2str(tDelays(i)));
-                obj.stop;
-            end
-            linkaxes(h,'x');
-        end
-        
+%             %set monitoring to trigger when there is a pulse on PFI0
+%             try
+%                 obj.monitor_daqSession.addTriggerConnection('external', 'Dev2/PFI2', 'StartTrigger');
+%             catch
+%             end
+%             obj.monitor_daqSession.DurationInSeconds = 3;
+%             
+%             
+%             tDelays = linspace(0.3/1000,0.8/1000,3);
+% %             
+%             figure;
+%             for i = 1:length(tDelays)
+% %                 obj.scan(1,tDelays(i));
+%                 obj.scan(3);
+%                 data = obj.monitor_daqSession.startForeground;
+%                 
+%                 tAxis = (0:length(data)-1)/obj.monitor_daqSession.Rate;
+%                 
+%                 h(i)=subplot(length(tDelays),1,i);
+%                 plot(tAxis, data); ylabel(num2str(tDelays(i)));
+%                 obj.stop;
+%             end
+%             linkaxes(h,'x');
+%         end
+%         
         function calibStereotaxic(obj)
             obj.thorcam.calibPIX2STE;
         end
         
         function calibVoltages(obj)
             obj.galvo.calibPOS2VOLTAGE(obj.thorcam);
+        end
+        
+        function generateGalvoLaserWaveforms(obj)
+            
         end
         
         function interact(obj)
@@ -137,7 +116,7 @@ classdef laserGalvo < handle
                 end
                 
                 pos = obj.thorcam.pix2pos([pix_x pix_y]);
-                obj.galvo.setV(obj.galvo.pos2v(pos));
+                obj.galvo.moveNow(obj.galvo.pos2v(pos));
                 disp(['X=' num2str(pos(1)) ' Y=' num2str(pos(2))]);
                 
                 pause(0.5);
@@ -280,23 +259,31 @@ classdef laserGalvo < handle
         end
 
         function stop(obj)
-            obj.LED_daqSession.stop;
-            obj.galvo.daqSession.stop;
-            obj.monitor_daqSession.stop;
+            obj.laser.stop;
+            obj.galvo.stop;
             
         end
         
          function saveLog(obj)
             log = obj.log;
             save(obj.filePath, 'log');        
-        end
+         end
         
+         function ste = coordID2ste(coordList,id)
+             hemisphere = sign(id);
+             ste = coordList(abs(id),:);
+             
+             if hemisphere == -1
+                 ste(1) = -ste(1);
+             end
+            
+         end
+         
         function delete(obj)
             obj.thorcam.delete;
             obj.galvo.delete;
+            obj.laser.delete;
             obj.expServerObj.delete;
-            delete(obj.LED_daqSession);
-            delete(obj.monitor_daqSession);
         end
         
     end
