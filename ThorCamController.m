@@ -1,4 +1,4 @@
-classdef ThorCam < handle
+classdef ThorCamController < handle
     properties
         camObj;
         ImageWidth;
@@ -22,7 +22,7 @@ classdef ThorCam < handle
     end
     
     methods
-        function obj = ThorCam %Create and initialise camera
+        function obj = ThorCamController %Create and initialise camera
             %Add NET assembly
             
             %Need to install the .dll file to the Global Assembly Cache

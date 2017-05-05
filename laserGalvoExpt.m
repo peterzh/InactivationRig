@@ -32,7 +32,7 @@ classdef laserGalvoExpt < handle
         function obj = laserGalvoExpt
             
             %Get camera object
-            obj.thorcam = ThorCam;
+            obj.thorcam = ThorCamController;
             
             %Get galvo controller object
             obj.galvo = GalvoController(obj.galvoDevice);
