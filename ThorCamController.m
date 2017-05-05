@@ -219,12 +219,18 @@ classdef ThorCamController < handle
             
             pix2pos_transform=obj.pix2pos_transform;
             pos2pix_transform=obj.pos2pix_transform;
-            filename = ['./calib/calib_PIX-POS.mat'];
+
+            mfiledir = fileparts(mfilename('fullpath'));
+            filename = fullfile(mfiledir,'calib','calib_PIX-POS.mat');
             save(filename,'pix2pos_transform','pos2pix_transform');
+            
         end
         
         function loadcalibPIX2POS(obj)
-            t = load('./calib/calib_PIX-POS.mat');
+            mfiledir = fileparts(mfilename('fullpath'));
+            filename = fullfile(mfiledir,'calib','calib_PIX-POS.mat');
+            t = load(filename);
+            
             obj.pix2pos_transform = t.pix2pos_transform;
             obj.pos2pix_transform = t.pos2pix_transform;
         end

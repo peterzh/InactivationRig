@@ -60,7 +60,9 @@ classdef GalvoController < handle
             obj.pos2volt_transform.c = mean(obj.pos2volt_transform.c,1);
             
             pos2volt_transform = obj.pos2volt_transform;
-            filename = ['./calib/calib_POS-VOLT.mat'];
+            
+            mfiledir = fileparts(mfilename('fullpath'));
+            filename = fullfile(mfiledir,'calib','calib_POS-VOLT.mat');
             save(filename,'pos2volt_transform');
         end
         
@@ -89,7 +91,9 @@ classdef GalvoController < handle
         end
         
         function loadcalibPOS2VOLT(obj)
-            t = load('./calib/calib_POS-VOLT.mat');
+            mfiledir = fileparts(mfilename('fullpath'));
+            filename = fullfile(mfiledir,'calib','calib_POS-VOLT.mat');
+            t = load(filename);
             obj.pos2volt_transform = t.pos2volt_transform;
         end
         

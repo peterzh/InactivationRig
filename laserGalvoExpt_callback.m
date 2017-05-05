@@ -84,6 +84,7 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
 
     
     tic;
+    
     %Setup waveforms depending on the trial configurations
     if galvoType == 1 %UNILATERAL SINGLE SCAN MODE
         disp('single scan mode');
