@@ -12,6 +12,14 @@ classdef LaserController < handle
             
         end
         
+        function volt = createSineWave(freq,amplitude,phase,duration)
+            rate = obj.daqSession.Rate;
+            
+            t = [0:(1/rate):duration]; t(1)=[];
+            volt = amplitude*sin(2*pi*freq*t);
+            error('add phase info');
+        end
+        
         function issueWaveform(obj,V_IN)
             obj.daqSession.queueOutputData(V_IN);
             obj.daqSession.startBackground;
