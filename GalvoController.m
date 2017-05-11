@@ -66,6 +66,23 @@ classdef GalvoController < handle
             save(filename,'pos2volt_transform');
         end
         
+        function v = generateWaveform(obj,numDots,frequency,volts,totalTime)
+            rate = obj.daqSession.rate;
+            t = 0:(1/rate):totalTime; t(1)=[];
+            
+            waveX = nan(size(t));
+            waveY = nan(size(t));
+            
+            for d = 1:numDots
+                idx = square(2*pi*frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
+                waveX(idx) = volts(d,1);
+                waveY(idx) = volts(d,2);
+            end
+            
+            v = [waveX' waveY'];
+            
+        end
+        
         function v=pos2v(obj,pos)
             if isempty(obj.pos2volt_transform)
                 error('need to calibrate');

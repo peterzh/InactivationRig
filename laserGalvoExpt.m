@@ -98,41 +98,7 @@ classdef laserGalvoExpt < handle
         function calibVoltages(obj)
             obj.galvo.calibPOS2VOLTAGE(obj.thorcam);
         end
-        
-        function [galvoV,laserV] = generateGalvoLaserWaveforms(obj,volts,laserType,laserAmplitude)
-            daq_rate = obj.galvo.daqSession.Rate; 
-            numDots = size(volts,1);
-            
-            %Create galvo waveform [square wave]
-            galvoFreq = 40 * numDots;
-            totalTime = 5;
-            t = [0:(1/daq_rate):totalTime]; t(1)=[];
-            waveX = nan(size(t));
-            waveY = nan(size(t));
-            
-            for d = 1:numDots
-                idx = square(2*pi*galvoFreq*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
-                waveX(idx) = volts(d,1);
-                waveY(idx) = volts(d,2);
-            end
-            galvoV = [waveX' waveY'];
-            
-            
-            %Create laser waveform [sine wave]
-            if laserType == 1 %laser off
-                laserV = zeros(length(t),1);
-            elseif laserType == 2 %laser on one site
-                laserFreq = 40;
-            elseif laserType == 3 %laser on both sites
-                laserFreq = 40 * numDots;
-                
-                
-                laserV = laserAmplitude*sin(2*pi*laserFreq*t);
 
-                error('add phase shift');
-            end
-        end
-        
         function interact(obj)
             disp('Exit by pressing q');
             
