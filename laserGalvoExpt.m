@@ -44,18 +44,6 @@ classdef laserGalvoExpt < handle
             obj.galvo.daqSession.Rate = 20e3;
             obj.laser.daqSession.Rate = 20e3;
             
-            
-            
-%             obj.monitor_daqSession = daq.createSession('ni');
-%             obj.monitor_daqSession.Rate = 60e3;
-%             obj.monitor_led = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai1', 'Voltage');
-%             obj.monitor_gx = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai3', 'Voltage');
-%             obj.monitor_gy = obj.monitor_daqSession.addAnalogInputChannel('Dev1', 'ai2', 'Voltage');
-%             
-%             obj.monitor_led.TerminalConfig = 'SingleEnded';
-%             obj.monitor_gx.TerminalConfig = 'SingleEnded';
-%             obj.monitor_gy.TerminalConfig = 'SingleEnded';
-            
 %             try
 %                 obj.registerListener;
 %             catch
@@ -64,33 +52,6 @@ classdef laserGalvoExpt < handle
             disp('Please run stereotaxic calibration, then register listener');
         end
         
-%         function monitor(obj)
-%             
-%             %set monitoring to trigger when there is a pulse on PFI0
-%             try
-%                 obj.monitor_daqSession.addTriggerConnection('external', 'Dev2/PFI2', 'StartTrigger');
-%             catch
-%             end
-%             obj.monitor_daqSession.DurationInSeconds = 3;
-%             
-%             
-%             tDelays = linspace(0.3/1000,0.8/1000,3);
-% %             
-%             figure;
-%             for i = 1:length(tDelays)
-% %                 obj.scan(1,tDelays(i));
-%                 obj.scan(3);
-%                 data = obj.monitor_daqSession.startForeground;
-%                 
-%                 tAxis = (0:length(data)-1)/obj.monitor_daqSession.Rate;
-%                 
-%                 h(i)=subplot(length(tDelays),1,i);
-%                 plot(tAxis, data); ylabel(num2str(tDelays(i)));
-%                 obj.stop;
-%             end
-%             linkaxes(h,'x');
-%         end
-%         
         function calibStereotaxic(obj)
             obj.thorcam.calibPIX2STE;
         end
@@ -259,6 +220,8 @@ classdef laserGalvoExpt < handle
         function stop(obj)
             obj.laser.stop;
             obj.galvo.stop;
+            
+            %issue TTL force stop to laser
         end
         
          function saveLog(obj)

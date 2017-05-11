@@ -19,6 +19,7 @@ classdef ThorCamController < handle
         vidAx;
         vidTimer;
         vidCustomCoords;
+        showGrid = 1;
     end
     
     methods
@@ -351,7 +352,7 @@ classdef ThorCamController < handle
             end
             
 %             %if pix2pos calibration done, overlay real position grid
-            if ~isempty(obj.pos2pix_transform)
+            if ~isempty(obj.pos2pix_transform) && obj.showGrid==1
                 pos = -4:1:4;
                 [x,y]=meshgrid(pos);
                 pix = obj.pos2pix([x(:) y(:)]);
@@ -370,7 +371,7 @@ classdef ThorCamController < handle
             end
           
             %if ste2pos calibration done, overlay stereotaxic grid
-            if ~isempty(obj.ste2pos_transform) && isempty(obj.vidCustomCoords)
+            if ~isempty(obj.ste2pos_transform) && isempty(obj.vidCustomCoords) && obj.showGrid==1
                 ste = -2:1:2;
                 [x,y]=meshgrid(ste);
                 pos = obj.ste2pos([x(:) y(:)]);
@@ -384,7 +385,7 @@ classdef ThorCamController < handle
                 plot(obj.vidAx,pix_x',pix_y','bo-');
                 h=plot(obj.vidAx,pix(ceil(end/2),1),pix(ceil(end/2),2),'bo'); set(h,'MarkerSize',20);
                 hold(obj.vidAx,'off');
-            elseif ~isempty(obj.ste2pos_transform) && ~isempty(obj.vidCustomCoords)
+            elseif ~isempty(obj.ste2pos_transform) && ~isempty(obj.vidCustomCoords) && obj.showGrid==1
                 ste = obj.vidCustomCoords;
                 ste = [ste; -ste(:,1) ste(:,2)];
                 pos = obj.ste2pos(ste);
@@ -399,6 +400,10 @@ classdef ThorCamController < handle
                 hold(obj.vidAx,'off');
             end
             
+        end
+        
+        function toggleGrid(obj)
+            obj.showGrid = 1 - obj.showGrid;
         end
         
         function delete(obj)

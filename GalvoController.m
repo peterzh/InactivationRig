@@ -43,17 +43,17 @@ classdef GalvoController < handle
             
             %Go through each voltage, issue to galvo, and determine the
             %real position of that laser dot
-            obj.setV([0 0]); pause(0.1);
+            obj.moveNow([0 0]); pause(0.1);
             
             pos = [];
             for p = 1:length(Vx)
                 %Issue voltage to Galvo
-                obj.setV([Vx(p) Vy(p)]);
+                obj.moveNow([Vx(p) Vy(p)]);
                 
                 %Use camera to determine the real position of the laser
                 %dot. Camera must be calibrated already
                 pause(0.5); %allow time for laser to move and new image to enter camera memory
-                pos(p,:) = ThorCam.getStimPos('auto');
+                pos(p,:) = ThorCam.getStimPos('manual');
             end
             
             [~,~,obj.pos2volt_transform] = procrustes([Vx Vy],pos);
@@ -66,9 +66,11 @@ classdef GalvoController < handle
             save(filename,'pos2volt_transform');
         end
         
-        function v = generateWaveform(obj,numDots,frequency,volts,totalTime)
-            rate = obj.daqSession.rate;
+        function v = generateWaveform(obj,frequency,volts,totalTime)
+            rate = obj.daqSession.Rate;
             t = 0:(1/rate):totalTime; t(1)=[];
+            
+            numDots = size(volts,1);
             
             waveX = nan(size(t));
             waveY = nan(size(t));

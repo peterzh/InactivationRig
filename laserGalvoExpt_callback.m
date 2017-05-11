@@ -24,8 +24,7 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
     %Start galvo rates
     LGObj.galvo.daqSession.Rate = 20e3;
     LGObj.laser.daqSession.Rate = 20e3;
-    
-    
+      
     %Register triggers
     LGObj.galvo.registerTrigger('Dev1/PFI0');
     LGObj.laser.registerTrigger('Dev1/PFI0');
