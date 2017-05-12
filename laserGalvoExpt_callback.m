@@ -102,75 +102,35 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         if laserType>1 %If laser ON
             laserFrequency = 40;
             laserAmplitude = laserPower;
-            volt = LGObj.laser.generateWaveform('sine',laserFrequency,laserAmplitude,5);
+            laserV = LGObj.laser.generateWaveform('sine',laserFrequency,laserAmplitude,10);
+                    
             disp(['laser ON voltage=: ' num2str(laserPower)]);
-            LGObj.laser.issueWaveform(volt);
+            LGObj.laser.issueWaveform(laserV);
         end
         
                 
     elseif galvoType == 2 % MULTI SCAN MODE
-        numDots = 2; %hard coded for now
         stereotaxicCoords = [stereotaxicCoords; -stereotaxicCoords(1), stereotaxicCoords(2)];
         pos = LGObj.thorcam.ste2pos(stereotaxicCoords);
-        volt = LGObj.galvo.pos2v(pos);
-        
-        %Get galvo waveforms        
-        galvoFreq = 40*numDots;
-        volt_galvo = LGObj.galvo.generateWaveform(numDots,galvoFreq,volt,5);        
-        
-        %Get laser waveforms
-        if laserType> 1 %Laser on for ONE location (the first one in the list)
-            laserFrequency = 40 * numDots;
-            laserAmplitude = laserPower;
-            if laserType == 2
-                disp(['laser ON at 1st site. power=' num2str(laserPower)]);
-                volt_laser = LGObj.laser.generateWaveform('sineHalf',laserFrequency,laserAmplitude,5);
-                %Remove cycle 1,3,5... of the waveform
-                
-            elseif laserType == 3
-                disp(['laser ON at both sites. power=' num2str(laserPower)]);
-                volt_laser = LGObj.laser.generateWaveform('sine',laserFrequency,laserAmplitude,5);
-            end
-        end
-        
-        
-        %Now ensure they are synchronised properly, and phase shifted to
-        %account for galvo delays
-        
-        
-        
-        
-        
-        
-        
-        
-
-        
-
-       
-%         %Trim galvo waveform to ensure galvos move slightly earlier
-%         %compare to the LED waveform
-%         LED_dt = 1/LGObj.LEDch.Frequency;
-%         galvoDelay = 0.3/1000; %0.3ms delay required to move the galvos
-%         delay = 0.5*(1-LGObj.LEDch.DutyCycle)*LED_dt + galvoDelay;
-%         trimSamples = round(DAQ_Rate * delay);
-%         V_IN = circshift(V_IN,-trimSamples);
-%         
         
         disp(['galvo scan between: ' num2str(stereotaxicCoords(1,1)) ',' num2str(stereotaxicCoords(1,2)) ' & ' num2str(stereotaxicCoords(2,1)) ',' num2str(stereotaxicCoords(2,2))]);
 
+        if laserType> 1 %Laser on for ONE location (the first one in the list)
+            laserAmplitude = laserPower;
 
-        
-        %Now issue waveforms, waiting for TTL pulse to initiate
-        LGObj.laser.issueWaveform(volt_laser);
-        LGObj.galvo.issueWaveform(volt_galvo);
-        
-        %populate log fields here, get needed details from
-        %eventObj
-        %                     LGObj.log.trialNumber = eventObj.?
-        %             LGObj.log.laser(LGObj.log.trialNumber) = laserON;
-        %             LGObj.log.laserpos(LGObj.log.trialNumber) = newCoordIndex;
-        
+            if laserType == 2
+                disp(['laser ON at 1st site. power=' num2str(laserPower)]);
+                LGObj.scan('onesite',pos,10,laserAmplitude);
+                
+            elseif laserType == 3
+                disp(['laser ON at both sites. power=' num2str(laserPower)]);
+                LGObj.scan('multisite',pos,10,laserAmplitude);
+            end
+        else
+            LGObj.scan('multisite',pos,5,0);
+        end
+
+    
     end
     toc;
         

@@ -13,8 +13,12 @@ classdef GalvoController < handle
             obj.daqSession = daq.createSession('ni');
             obj.daqDevices = daq.getDevices;
             
-            obj.AOX = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
-            obj.AOY = obj.daqSession.addAnalogOutputChannel(device, 1, 'Voltage');
+            try
+                obj.AOX = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
+                obj.AOY = obj.daqSession.addAnalogOutputChannel(device, 1, 'Voltage');
+            catch
+                warning(['GalvoController failed to initialise on ' device])
+            end
             
             %try loading pos2volt calibration
             try

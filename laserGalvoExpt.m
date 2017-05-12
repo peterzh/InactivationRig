@@ -44,11 +44,6 @@ classdef laserGalvoExpt < handle
             obj.galvo.daqSession.Rate = 20e3;
             obj.laser.daqSession.Rate = 20e3;
             
-%             try
-%                 obj.registerListener;
-%             catch
-%                 warning('Failed to register expServer listener');
-%             end
             disp('Please run stereotaxic calibration, then register listener');
         end
         
@@ -59,7 +54,7 @@ classdef laserGalvoExpt < handle
         function calibVoltages(obj)
             obj.galvo.calibPOS2VOLTAGE(obj.thorcam);
         end
-
+        
         function interact(obj)
             disp('Exit by pressing q');
             
@@ -85,126 +80,52 @@ classdef laserGalvoExpt < handle
             
         end
         
-        function scan(obj,pos,totalTime)
-            %scan galvo between multiple points rapidly used for bilateral
+        function scan(obj,mode,pos,totalTime,laserAmplitude)
+            %scan galvo between multiple points rapidly used for multi-site
             %inactivation
             
-%             pos = [2 2;
-%                    2 -2;
-%                    -2 -2;
-%                    -2 2];
-%             
+            numDots = size(pos,1);
+            laserFreqAtEachSite = 40;
+            
+            switch(mode)
+                case 'multisite' %Illuminate each location
+                    laserFreq = laserFreqAtEachSite*numDots;
+                    laserV = obj.laser.generateWaveform('trunacedSin',laserFreq,laserAmplitude,totalTime);
+
+                case 'onesite'
+                    laserFreq = laserFreqAtEachSite;
+                    pos = pos(1,:); %Get first position
+                    pos = [pos; -pos(1) pos(2)]; %add 2nd position at the mirror location
+                    laserV = obj.laser.generateWaveform('sinHalf',laserFreq,laserAmplitude,totalTime);
+                case 'multisite_laseroff'
+                    laserV = 0;
+            end
+            
             v = obj.galvo.pos2v(pos);
-            
-%             v = [-1 -1; 1 1; 0 2; 0 3];
-            numDots = size(v,1);
-            
-            %Setup LED stimulation
-            obj.LEDch.Frequency = 40*numDots; %we want 40Hz laser at each location, therefore laser needs to output 40*n Hz if multiple sites
-            obj.LEDch.DutyCycle = 0.90;
-            
-%             DAQ_Rate = numSamples*obj.LEDch.Frequency; %sample rate processed on the galvo DAQ session
-            obj.galvo.daqSession.Rate = 20e3;
-            DAQ_Rate = obj.galvo.daqSession.Rate; %get back real rate
-            
-            %galvo needs to place the laser at each location for the length
-            %of the LED's single cycle.
-            t = [0:(1/DAQ_Rate):totalTime]; t(1)=[];
-            
-            waveX = nan(size(t));
-            waveY = nan(size(t));
+            galvoFreq = laserFreqAtEachSite*numDots;
+            galvoV = obj.galvo.generateWaveform(galvoFreq,v,totalTime);
 
-            for d = 1:numDots
-                idx = square(2*pi*obj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
-                waveX(idx) = v(d,1);
-                waveY(idx) = v(d,2);
-            end
+            %Register the trigger for galvo and LEDs to start together
+            obj.galvo.registerTrigger('Dev1/PFI0');
+            obj.laser.registerTrigger('Dev2/PFI0');
             
-            V_IN = [waveX' waveY'];
-            
-            %Register the trigger for galvo and LEDs
-            try
-                obj.galvo.daqSession.addTriggerConnection('external', 'Dev1/PFI0', 'StartTrigger');
-                obj.LED_daqSession.addTriggerConnection('external', 'Dev1/PFI1', 'StartTrigger');
-            catch
-            end
-            
-            %Trim galvo waveform to ensure galvos move slightly earlier
-            %compare to the LED waveform
-            LED_dt = 1/obj.LEDch.Frequency; %the amount of time taken for the LED to cycle once
-            galvoDelay = 0.3/1000; %0.4ms delay required to move the galvos
-            delay = 0.5*(1-obj.LEDch.DutyCycle)*LED_dt + galvoDelay;
-            trimSamples = round(DAQ_Rate * delay);
-            V_IN = circshift(V_IN,-trimSamples);
-            
-            
-            
+            %shift galvo waveform to ensure galvos move slightly earlier
+            %compare to the LED waveform because galvo has a delay to
+            %action
+            galvo_laser_delay = 1e-3; %Delay between laser UP state and galvo movement
+            numEle = obj.galvo.Rate*galvo_laser_delay;
+            galvoV = circshift(galvoV,numEle);
+
             %issue voltage trace to analogue-out channels of galvo
-            obj.galvo.issueWaveform(V_IN);
-
-            %start laser background
-            obj.LED_daqSession.startBackground;
+            obj.galvo.issueWaveform(galvoV);
+            obj.laser.issueWaveform(laserV);
             
-            obj.galvo.daqSession.wait();
+            obj.laser.daqSession.wait();
             obj.stop;
-        end
-        
-        function scanOnePos(obj,pos,totalTime) 
-            if size(pos,1)>1
-                error('only specify one position!');
-            end
             
-            %add a 2nd point which is the contralateral partner
-            pos = [pos; -pos(1) pos(2)];
-            
-            %Move galvos between all sites in POS but only illuminate the
-            %laser on the first of them
-            v = obj.galvo.pos2v(pos);
-            numDots = size(v,1);
-            
-            obj.galvo.daqSession.Rate = 20e3;
-            DAQ_Rate = obj.galvo.daqSession.Rate; %get back real rate
-            
-            t = [0:(1/DAQ_Rate):totalTime]; t(1)=[];
-            
-            waveX = nan(size(t));
-            waveY = nan(size(t));
-            
-            obj.LEDch.Frequency = 40*numDots;
-            obj.LEDch.DutyCycle = 0.90;
-            
-            for d = 1:numDots
-                idx = square(2*pi*obj.LEDch.Frequency*t/numDots - (d-1)*(2*pi)/numDots,100/numDots)==1;
-                waveX(idx) = v(d,1);
-                waveY(idx) = v(d,2);
-            end
-            
-            V_IN = [waveX' waveY'];
-            
-            %Trim galvo waveform to ensure galvos move slightly earlier
-            %compare to the LED waveform
-            LED_dt = 1/obj.LEDch.Frequency;
-            galvoDelay = 0.3/1000; %0.4ms delay required to move the galvos
-            delay = 0.5*(1-obj.LEDch.DutyCycle)*LED_dt + galvoDelay;
-            trimSamples = round(DAQ_Rate * delay);
-            V_IN = circshift(V_IN,-trimSamples);
-
-            %Register the trigger for galvo and LEDs
-            try
-                obj.galvo.daqSession.addTriggerConnection('external', 'Dev1/PFI0', 'StartTrigger');
-                %                 obj.LED_daqSession.addTriggerConnection('external', 'Dev2/PFI1', 'StartTrigger');
-            catch
-            end
-            
-            
-            obj.LEDch.Frequency = 40;
-            obj.LEDch.DutyCycle = obj.LEDch.DutyCycle/numDots; 
-            
-            %issue voltage trace to analogue-out channels of galvo
-            obj.galvo.issueWaveform(V_IN);
-            
-            %start laser background
-            obj.LED_daqSession.startBackground;
+            %Remove triggers
+            obj.galvo.removeTrigger;
+            obj.laser.removeTrigger;
             
         end
         
@@ -216,7 +137,7 @@ classdef laserGalvoExpt < handle
             addlistener(s, 'ExpUpdate', anonListen);
             obj.expServerObj = s;
         end
-
+        
         function stop(obj)
             obj.laser.stop;
             obj.galvo.stop;
@@ -224,21 +145,21 @@ classdef laserGalvoExpt < handle
             %issue TTL force stop to laser
         end
         
-         function saveLog(obj)
+        function saveLog(obj)
             log = obj.log;
-            save(obj.filePath, 'log');        
-         end
+            save(obj.filePath, 'log');
+        end
         
-         function ste = coordID2ste(coordList,id)
-             hemisphere = sign(id);
-             ste = coordList(abs(id),:);
-             
-             if hemisphere == -1
-                 ste(1) = -ste(1);
-             end
+        function ste = coordID2ste(coordList,id)
+            hemisphere = sign(id);
+            ste = coordList(abs(id),:);
             
-         end
-         
+            if hemisphere == -1
+                ste(1) = -ste(1);
+            end
+            
+        end
+        
         function delete(obj)
             obj.thorcam.delete;
             obj.galvo.delete;

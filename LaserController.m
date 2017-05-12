@@ -10,8 +10,11 @@ classdef LaserController < handle
     methods
         function obj = LaserController(device)
             obj.daqSession = daq.createSession('ni');
-            obj.AO0 = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
-            
+            try
+                obj.AO0 = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
+            catch
+                warning(['LaserController failed to initialise on ' device])
+            end
         end
         
         function volt = generateWaveform(obj,type,frequency,amplitudeVoltage,totalTime)
@@ -28,6 +31,18 @@ classdef LaserController < handle
                     
                     idx = mod(cumsum(volt==min(volt)),2)==0; %Indices to turn one cycle off
                     volt(idx) = 0;
+                case 'trunacedSin'                 
+                    galvoMoveTime = 0.5e-3;
+                    numElements = rate*galvoMoveTime/2;
+                    volt = 0.5*amplitudeVoltage*cos(2*pi*frequency*t) + 0.5*amplitudeVoltage;
+                    cutOff = amplitudeVoltage - volt(numElements);
+                    
+                    %Normal sine wave
+                    volt = 0.5*amplitudeVoltage*sin(2*pi*frequency*t) + 0.5*amplitudeVoltage;
+                    %Truncate at output level
+                    volt(volt<cutOff) = 0;
+                 
+                    plot(t,volt);
             end
             
             warning('TODO: add phase shift');
@@ -46,6 +61,9 @@ classdef LaserController < handle
             obj.daqSession.removeConnection(1);
         end
         
+        function I_LD = laserCurrent(ILD_SET, ILD_MAX, VOLT_IN)
+            I_LD = ILD_SET + ILD_MAX*VOLT_IN/10;
+        end
         
         function stop(obj)
             obj.daqSession.stop;
