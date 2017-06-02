@@ -1,9 +1,9 @@
 classdef GalvoController < handle
     properties
+        device;
         daqSession;
-        daqDevices;
-        AOX; %analogue out channel X
-        AOY; %analogue out channel Y
+        AO0; %analogue out channel 0
+        AO1; %analogue out channel 1
         pos2volt_transform; %transforms real position to volts
     end
     
@@ -11,11 +11,11 @@ classdef GalvoController < handle
         
         function obj = GalvoController(device)
             obj.daqSession = daq.createSession('ni');
-            obj.daqDevices = daq.getDevices;
+            obj.device = device;
             
             try
-                obj.AOX = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
-                obj.AOY = obj.daqSession.addAnalogOutputChannel(device, 1, 'Voltage');
+                obj.AO0 = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
+                obj.AO1 = obj.daqSession.addAnalogOutputChannel(device, 1, 'Voltage');
             catch
                 warning(['GalvoController failed to initialise on ' device])
             end
@@ -25,7 +25,7 @@ classdef GalvoController < handle
                 obj.loadcalibPOS2VOLT; 
                 disp('Loaded position<->voltage calibration');
             catch
-                disp('did not load calibration');
+                disp('did not load position<->voltage calibration');
             end
         end
         

@@ -24,11 +24,11 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
     %Start galvo rates
     LGObj.galvo.daqSession.Rate = 20e3;
     LGObj.laser.daqSession.Rate = 20e3;
-      
+    
     %Register triggers
-    LGObj.galvo.registerTrigger('Dev1/PFI0');
-    LGObj.laser.registerTrigger('Dev1/PFI0');
-%     
+    LGObj.galvo.registerTrigger([LGObj.galvoDevice '/PFI0']);
+    LGObj.laser.registerTrigger([LGObj.laserDevice '/PFI0']);
+
 % elseif isstruct(eventObj.Data) && ~any(strcmp({eventObj.Data.name},'events.buildWaveform')) 
 %     %If any variables in the eventObj field, update them
 %     names = {eventObj.Data.name};
@@ -82,8 +82,14 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     disp(['galvoPos: ' num2str(galvoPos)]);
 
     
-    stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
-    
+        stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
+%     hemisphere = sign(galvoPos);
+%     ste = LGObj.galvoCoords(abs(galvoPos),:);
+%     
+%     if hemisphere == -1
+%         ste(1) = -ste(1);
+%     end
+%     stereotaxicCoords = ste;
     tic;
     
     %Setup waveforms depending on the trial configurations
@@ -102,7 +108,7 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         if laserType>1 %If laser ON
             laserFrequency = 40;
             laserAmplitude = laserPower;
-            laserV = LGObj.laser.generateWaveform('sine',laserFrequency,laserAmplitude,10);
+            laserV = LGObj.laser.generateWaveform('trunacedCos',laserFrequency,laserAmplitude,10);
                     
             disp(['laser ON voltage=: ' num2str(laserPower)]);
             LGObj.laser.issueWaveform(laserV);
