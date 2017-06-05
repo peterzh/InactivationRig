@@ -4,10 +4,12 @@ classdef laserGalvoExpt < handle
     properties
         galvoDevice='Dev1';
         laserDevice='Dev2';
+        monitorDevice='Dev2';
         
         thorcam;
         galvo;
         laser;
+        monitor;
                 
         expServerObj;
         galvoCoords;
@@ -24,7 +26,7 @@ classdef laserGalvoExpt < handle
         function obj = laserGalvoExpt
             
             %Get camera object
-            obj.thorcam = ThorCamController;
+%             obj.thorcam = ThorCamController;
             
             %Get galvo controller object
             obj.galvo = GalvoController(obj.galvoDevice);
@@ -32,9 +34,13 @@ classdef laserGalvoExpt < handle
             %Get laser controller object
             obj.laser = LaserController(obj.laserDevice);
             
+            %Setup monitor channels
+            obj.monitor = MonitorController(obj.monitorDevice);
+            
             %Set equal rates
             obj.galvo.daqSession.Rate = 20e3;
             obj.laser.daqSession.Rate = 20e3;
+            obj.monitor.daqSession.Rate = 20e3;
             
             disp('Please run stereotaxic calibration, then register listener');
         end
@@ -115,7 +121,8 @@ classdef laserGalvoExpt < handle
         function scanManual(obj,mode,pos,totalTime,laserAmplitude)
             %scan galvo between multiple points rapidly used for multi-site
             %inactivation
-            %This function includes trigger setting up and removal
+            %This function includes trigger setting up and removal, and a
+            %monitor channel for a photodiode
             
             numDots = size(pos,1);
             laserFreqAtEachSite = 40;
@@ -137,6 +144,7 @@ classdef laserGalvoExpt < handle
             %Register the trigger for galvo and LEDs to start together
             obj.galvo.registerTrigger([obj.galvoDevice '/PFI0']);
             obj.laser.registerTrigger([obj.laserDevice '/PFI0']);
+            obj.monitor.registerTrigger([obj.monitorDevice '/PFI0']);
             disp('registered triggers');
             
             %shift galvo waveform to ensure galvos move slightly earlier
@@ -155,14 +163,39 @@ classdef laserGalvoExpt < handle
             obj.galvo.issueWaveform(galvoV);
             obj.laser.issueWaveform(laserV);
             
-            obj.galvo.daqSession.wait();
-            obj.stop;
+            obj.monitor.daqSession.DurationInSeconds = totalTime;
+            [data,time] = obj.monitor.daqSession.startForeground;
+            plot(time,data,'k-',time,laserV,'k:');
+            
+            obj.galvo.daqSession.wait;
             
             %             %Remove triggers
             obj.galvo.removeTrigger;
             obj.laser.removeTrigger;
+            obj.monitor.removeTrigger;
             %             close(f);
             
+        end
+        
+        function diode(obj)
+            volts = round(linspace(1,5,8),1);
+            figure('color','w');
+            
+            h = [];
+            for v = 1:length(volts)
+                h(v) = subplot(length(volts),1,v);
+                obj.scanManual('onesite',[-3 0;3 0],0.1,volts(v));
+                set(gca,'box','off');
+                ylim([0 10]);
+                ylabel(num2str(volts(v)));
+                
+                if v < length(volts)
+                    set(gca,'xtick','','xcolor','w');
+                end
+            end
+            
+            linkaxes(h,'xy');
+            xlabel('Time(sec)');
         end
         
         function registerListener(obj)
@@ -200,7 +233,7 @@ classdef laserGalvoExpt < handle
         end
         
         function delete(obj)
-            obj.thorcam.delete;
+%             obj.thorcam.delete;
             obj.galvo.delete;
             obj.laser.delete;
             try
