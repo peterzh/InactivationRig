@@ -4,16 +4,16 @@ classdef laserGalvoExpt < handle
     properties
         galvoDevice='Dev1';
         laserDevice='Dev2';
-        monitorDevice='Dev2';
+        %         monitorDevice='Dev2';
         
         thorcam;
         galvo;
         laser;
-        monitor;
-                
+        %         monitor;
+        
         expServerObj;
         galvoCoords;
-
+        
         mode;
         mouseName;
         expNum;
@@ -26,7 +26,7 @@ classdef laserGalvoExpt < handle
         function obj = laserGalvoExpt
             
             %Get camera object
-%             obj.thorcam = ThorCamController;
+            obj.thorcam = ThorCamController;
             
             %Get galvo controller object
             obj.galvo = GalvoController(obj.galvoDevice);
@@ -35,12 +35,12 @@ classdef laserGalvoExpt < handle
             obj.laser = LaserController(obj.laserDevice);
             
             %Setup monitor channels
-            obj.monitor = MonitorController(obj.monitorDevice);
+            %             obj.monitor = MonitorController(obj.monitorDevice);
             
             %Set equal rates
-            obj.galvo.daqSession.Rate = 20e3;
-            obj.laser.daqSession.Rate = 20e3;
-            obj.monitor.daqSession.Rate = 20e3;
+            obj.galvo.daqSession.Rate = 30e3;
+            obj.laser.daqSession.Rate = 30e3;
+            %             obj.monitor.daqSession.Rate = 30e3;
             
             disp('Please run stereotaxic calibration, then register listener');
         end
@@ -94,28 +94,28 @@ classdef laserGalvoExpt < handle
             
             switch(mode)
                 case 'multisite' %Illuminate each location
-                    laserV = obj.laser.generateWaveform('trunacedCos',laserFreq,laserAmplitude,totalTime,[]);
+                    laserV = obj.laser.generateWaveform('truncatedCos',laserFreq,laserAmplitude,totalTime,[]);
                 case 'onesite'
-                    laserV = obj.laser.generateWaveform('trunacedCosHalf',laserFreq,laserAmplitude,totalTime,numDots);
+                    laserV = obj.laser.generateWaveform('truncatedCosHalf',laserFreq,laserAmplitude,totalTime,numDots);
                 case 'multisite_laseroff'
                     laserV = zeros(size(galvoV,1),1);
             end
-
+            
             %shift galvo waveform to ensure galvos move slightly earlier
             %compare to the LED waveform because galvo has a delay to
             %action
-%             galvo_laser_delay = 1e-3; %Delay between laser UP state and galvo movement
-%             numEle = obj.galvo.daqSession.Rate*galvo_laser_delay;
-%             galvoV = circshift(galvoV,numEle);
-
+            %             galvo_laser_delay = 1e-3; %Delay between laser UP state and galvo movement
+            %             numEle = obj.galvo.daqSession.Rate*galvo_laser_delay;
+            %             galvoV = circshift(galvoV,numEle);
+            
             rate = obj.galvo.daqSession.Rate;
             t = 0:(1/rate):totalTime; t(1)=[];
-%             f=figure;
-%             plot(t,galvoV,t,laserV); xlim([0 0.1]);
+            %             f=figure;
+            %             plot(t,galvoV,t,laserV); xlim([0 0.1]);
             
             %issue voltage trace to analogue-out channels of galvo
             obj.galvo.issueWaveform(galvoV);
-            obj.laser.issueWaveform(laserV);            
+            obj.laser.issueWaveform(laserV);
         end
         
         function scanManual(obj,mode,pos,totalTime,laserAmplitude)
@@ -134,9 +134,9 @@ classdef laserGalvoExpt < handle
             
             switch(mode)
                 case 'multisite' %Illuminate each location
-                    laserV = obj.laser.generateWaveform('trunacedCos',laserFreq,laserAmplitude,totalTime,[]);
+                    laserV = obj.laser.generateWaveform('truncatedCos',laserFreq,laserAmplitude,totalTime,[]);
                 case 'onesite'
-                    laserV = obj.laser.generateWaveform('trunacedCosHalf',laserFreq,laserAmplitude,totalTime,numDots);
+                    laserV = obj.laser.generateWaveform('truncatedCosHalf',laserFreq,laserAmplitude,totalTime,numDots);
                 case 'multisite_laseroff'
                     laserV = zeros(size(galvoV,1),1);
             end
@@ -144,7 +144,7 @@ classdef laserGalvoExpt < handle
             %Register the trigger for galvo and LEDs to start together
             obj.galvo.registerTrigger([obj.galvoDevice '/PFI0']);
             obj.laser.registerTrigger([obj.laserDevice '/PFI0']);
-            obj.monitor.registerTrigger([obj.monitorDevice '/PFI0']);
+            %             obj.monitor.registerTrigger([obj.monitorDevice '/PFI0']);
             disp('registered triggers');
             
             %shift galvo waveform to ensure galvos move slightly earlier
@@ -163,16 +163,16 @@ classdef laserGalvoExpt < handle
             obj.galvo.issueWaveform(galvoV);
             obj.laser.issueWaveform(laserV);
             
-            obj.monitor.daqSession.DurationInSeconds = totalTime;
-            [data,time] = obj.monitor.daqSession.startForeground;
-            plot(time,data,'k-',time,laserV,'k:');
+            %             obj.monitor.daqSession.DurationInSeconds = totalTime;
+            %             [data,time] = obj.monitor.daqSession.startForeground;
+            %             plot(time,data,'k-',time,laserV,'k:');
             
             obj.galvo.daqSession.wait;
             
             %             %Remove triggers
             obj.galvo.removeTrigger;
             obj.laser.removeTrigger;
-            obj.monitor.removeTrigger;
+            %             obj.monitor.removeTrigger;
             %             close(f);
             
         end
@@ -233,7 +233,7 @@ classdef laserGalvoExpt < handle
         end
         
         function delete(obj)
-%             obj.thorcam.delete;
+            %             obj.thorcam.delete;
             obj.galvo.delete;
             obj.laser.delete;
             try

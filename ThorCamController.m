@@ -20,6 +20,8 @@ classdef ThorCamController < handle
         vidTimer;
         vidCustomCoords;
         showGrid = 1;
+        
+        vidState='high'; %low gain or high gain
     end
     
     methods
@@ -179,7 +181,7 @@ classdef ThorCamController < handle
             %long as the setup isn't modified physically
             
             %create grid of points in REAL space
-            [pos_y,pos_x] = meshgrid(-2:2:2);
+            [pos_y,pos_x] = meshgrid(-4:2:4);
             pos_x = pos_x(:);
             pos_y = pos_y(:);
             
@@ -227,6 +229,19 @@ classdef ThorCamController < handle
             
         end
         
+        function toggleCamera(obj)
+            switch (obj.vidState)
+                case 'low'
+                    obj.setExposure(100);
+                    obj.setGain(100);
+                    obj.vidState = 'high';
+                case 'high'
+                    obj.setExposure(1);
+                    obj.setGain(1);
+                    obj.vidState = 'low';
+            end
+        end
+        
         function loadcalibPIX2POS(obj)
             mfiledir = fileparts(mfilename('fullpath'));
             filename = fullfile(mfiledir,'calib','calib_PIX-POS.mat');
@@ -239,6 +254,12 @@ classdef ThorCamController < handle
         function calibPIX2STE(obj)
             %Calibrate pixel position to stereotaxic coords. Need to do
             %this everytime you headfix
+            
+            %Set camera to highest brightness
+            if strcmp(obj.vidState,'low')
+                obj.toggleCamera; 
+                pause(0.5);
+            end
             
             %get 'real pos' of bregma and lambda, requires PIX2POS calib
             %already

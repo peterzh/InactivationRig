@@ -22,8 +22,8 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
     %START LOG FILE
     
     %Start galvo rates
-    LGObj.galvo.daqSession.Rate = 20e3;
-    LGObj.laser.daqSession.Rate = 20e3;
+    LGObj.galvo.daqSession.Rate = 30e3;
+    LGObj.laser.daqSession.Rate = 30e3;
     
     %Register triggers
     LGObj.galvo.registerTrigger([LGObj.galvoDevice '/PFI0']);
@@ -58,6 +58,8 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
 elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTrial'))
     LGObj.stop;
     
+    tic;
+    
     names = {eventObj.Data.name};
     values = {eventObj.Data.value};
     
@@ -77,12 +79,14 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     
     disp('--');
     disp(['trialNum: ' num2str(trialNum)]);
-    disp(['galvoType: ' num2str(galvoType)]);
-    disp(['laserType: ' num2str(laserType)]);
-    disp(['galvoPos: ' num2str(galvoPos)]);
+%     disp(['galvoType: ' num2str(galvoType)]);
+%     disp(['laserType: ' num2str(laserType)]);
+%     disp(['galvoPos: ' num2str(galvoPos)]);
 
+    LGObj.galvo.daqSession.Rate = 30e3;
+    LGObj.laser.daqSession.Rate = 30e3;
     
-        stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
+    stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
 %     hemisphere = sign(galvoPos);
 %     ste = LGObj.galvoCoords(abs(galvoPos),:);
 %     
@@ -90,11 +94,10 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
 %         ste(1) = -ste(1);
 %     end
 %     stereotaxicCoords = ste;
-    tic;
     
     %Setup waveforms depending on the trial configurations
     if galvoType == 1 %UNILATERAL SINGLE SCAN MODE
-        disp('single scan mode');
+%         disp('single scan mode');
 
         %Just place the galvo at the location now, and
         %then trigger the laser output by the TTL pulse
@@ -107,8 +110,8 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         if laserType>1 %If laser ON
             laserFrequency = 40;
-            laserAmplitude = laserPower;
-            laserV = LGObj.laser.generateWaveform('trunacedCos',laserFrequency,laserAmplitude,10);
+            laserVolt = laserPower;
+            laserV = LGObj.laser.generateWaveform('truncatedCos',laserFrequency,laserVolt,10,[]);
                     
             disp(['laser ON voltage=: ' num2str(laserPower)]);
             LGObj.laser.issueWaveform(laserV);
@@ -119,18 +122,18 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         stereotaxicCoords = [stereotaxicCoords; -stereotaxicCoords(1), stereotaxicCoords(2)];
         pos = LGObj.thorcam.ste2pos(stereotaxicCoords);
         
-        disp(['galvo scan between: ' num2str(stereotaxicCoords(1,1)) ',' num2str(stereotaxicCoords(1,2)) ' & ' num2str(stereotaxicCoords(2,1)) ',' num2str(stereotaxicCoords(2,2))]);
+        disp(['galvo scan Stereotaxic: ' num2str(stereotaxicCoords(1,1)) ',' num2str(stereotaxicCoords(1,2)) ' & ' num2str(stereotaxicCoords(2,1)) ',' num2str(stereotaxicCoords(2,2))]);
 
         if laserType> 1 %Laser on for ONE location (the first one in the list)
-            laserAmplitude = laserPower;
+            laserVolt = laserPower;
 
             if laserType == 2
-                disp(['laser ON at 1st site. power=' num2str(laserPower)]);
-                LGObj.scan('onesite',pos,10,laserAmplitude);
+                disp(['laser ON at 1st site. volt=' num2str(laserPower)]);
+                LGObj.scan('onesite',pos,5,laserVolt);
                 
             elseif laserType == 3
-                disp(['laser ON at both sites. power=' num2str(laserPower)]);
-                LGObj.scan('multisite',pos,10,laserAmplitude);
+                disp(['laser ON at both sites. volt=' num2str(laserPower)]);
+                LGObj.scan('multisite',pos,5,laserVolt);
             end
         else
             LGObj.scan('multisite',pos,5,0);
@@ -139,15 +142,9 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     
     end
     toc;
-        
-% elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.buildWaveform'))
 
-    
 elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.galvoAndLaserEnd'))
     disp('GALVO AND LASER OFF');
-    LGObj.stop;
-    
-elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.endTrial'))
     LGObj.stop;
     
 elseif iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentEnded')

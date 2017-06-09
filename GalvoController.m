@@ -40,7 +40,7 @@ classdef GalvoController < handle
             %Uses thor camera calibration to get measure of real position
             %of a laser dot
             
-            V_in = -1:1:1;
+            V_in = -1:0.5:1;
             [Vy,Vx] = meshgrid(V_in);
             Vx = Vx(:);
             Vy = Vy(:);

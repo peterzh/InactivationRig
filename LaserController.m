@@ -26,19 +26,22 @@ classdef LaserController < handle
             catch
                 disp('did not load power<->voltage calibration');
             end
+            
+            %Set to zero output if not already
+            obj.daqSession.outputSingleScan(0);
         end
         
         function volt = generateWaveform(obj,type,frequency,amplitudeVoltage,totalTime,otherInfo)
             rate = obj.daqSession.Rate;
             t = (0:(1/rate):totalTime)'; t(1)=[];
-            galvoMoveTime = 1e-3; %The amount of time allowed for galvos to move, inbetween laser cycles
+            galvoMoveTime = 2e-3; %The amount of time allowed for galvos to move, inbetween laser cycles
             numElements = round(rate*galvoMoveTime/2);
             if numElements == 0
                 numElements = 1;
             end
             
             switch(type)
-                case 'trunacedCosHalf' %Cycle 1,3,5... is set to zero
+                case 'truncatedCosHalf' %Cycle 1,3,5... is set to zero
                     numDots = otherInfo;
                     
                     sq = cumsum(diff(square(2*pi*frequency*t))>0); sq=[sq;0];
@@ -51,7 +54,7 @@ classdef LaserController < handle
                     
                     cutOff = volt(numElements);
                     volt(volt<cutOff) = 0;
-                case 'trunacedCos'                 
+                case 'truncatedCos'                 
                     volt = -0.5*amplitudeVoltage*cos(2*pi*frequency*t) + 0.5*amplitudeVoltage;
                     cutOff = volt(numElements);
 
@@ -79,14 +82,14 @@ classdef LaserController < handle
             %Issues different voltages to the laser to calibrate the power,
             %requires manually inputting the laser power
             
-            volts = linspace(1,4,20)';
+            volts = linspace(1,5,20)';
             power = nan(size(volts));
             
             for i = 1:length(volts)
                 %Set laser power
 %                 obj.daqSession.outputSingleScan(volts(i));
                 
-                laserV = obj.generateWaveform('trunacedCosHalf',80,volts(i),3,2);
+                laserV = obj.generateWaveform('trunacedCosHalf',80,volts(i),5,2);
                 obj.issueWaveform(laserV);
                 
                 power(i) = input('Power [mW]:');
