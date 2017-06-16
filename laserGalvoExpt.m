@@ -14,10 +14,6 @@ classdef laserGalvoExpt < handle
         expServerObj;
         galvoCoords;
         
-        mode;
-        mouseName;
-        expNum;
-        expDate;
         log;
         filepath;
     end
@@ -217,9 +213,20 @@ classdef laserGalvoExpt < handle
             obj.galvo.stop;
         end
         
+        function appendToLog(obj,ROW)
+            if isempty(obj.log)
+                obj.log=ROW;
+            else
+                fields = fieldnames(obj.log);
+                for f = 1:length(fields)
+                    obj.log.(fields{f}) = [obj.log.(fields{f}); ROW.(fields{f})];
+                end
+            end
+        end
+        
         function saveLog(obj)
             log = obj.log;
-            save(obj.filePath, 'log');
+            save(obj.filepath, '-struct', 'log');
         end
         
         function ste = coordID2ste(obj,coordList,id)

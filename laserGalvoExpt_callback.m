@@ -6,8 +6,6 @@ function laserGalvoExpt_callback(eventObj, LGObj)
 
 %TODO:
 %{
-1) PIP: TTL pulse to be delivered at start of stimulus
-
 2) ME: I should allow for different arrival times of variables
 
 4) Figure out how to specify laser power
@@ -17,9 +15,11 @@ function laserGalvoExpt_callback(eventObj, LGObj)
 %}
 
 if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experiment started
-    disp('STARTED EXPERIMENT');
-
+    expRef = eventObj.Ref;
+    disp(['STARTED EXPERIMENT: ' expRef]);
     %START LOG FILE
+    LGObj.log = []; LGObj.filepath = [];
+    LGObj.filepath = [dat.expPath(expRef, 'expInfo', 'm') '\' expRef '_galvoLog.mat'];
     
     %Start galvo rates
     LGObj.galvo.daqSession.Rate = 30e3;
@@ -57,6 +57,7 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
     
 elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTrial'))
     LGObj.stop;
+    LGObj.thorcam.vidHighlight = [];
     
     tic;
     
@@ -69,7 +70,7 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
             LGObj.thorcam.vidCustomCoords = LGObj.galvoCoords; %Send down to thorcam object for plotting
         end
         trialNum = values{strcmp(names,'events.trialNum')};
-        laserType = values{strcmp(names,'events.laserType')}; % 1=off, 2=illuminate 1 site, 3=illuminate 2 sites
+        laserType = values{strcmp(names,'events.laserType')}; % 0=off, 1=illuminate 1 site, 2=illuminate 2 sites
         galvoPos = values{strcmp(names,'events.galvoPos')}; %Coordinate (+ right hemisphere, - left hemisphere)
         galvoType = values{strcmp(names,'events.galvoType')}; %1 = single scan mode, 2 = multi scan mode
         laserPower = values{strcmp(names,'events.laserPower')};
@@ -77,15 +78,15 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         error('Some necessary signals werent in the events structure. Need to implement separate buildWaveform step');
     end
     
+    ROW = struct;
+    ROW.delay_readVar = toc;
+    
     disp('--');
     disp(['trialNum: ' num2str(trialNum)]);
 %     disp(['galvoType: ' num2str(galvoType)]);
 %     disp(['laserType: ' num2str(laserType)]);
 %     disp(['galvoPos: ' num2str(galvoPos)]);
 
-    LGObj.galvo.daqSession.Rate = 30e3;
-    LGObj.laser.daqSession.Rate = 30e3;
-    
     stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
 %     hemisphere = sign(galvoPos);
 %     ste = LGObj.galvoCoords(abs(galvoPos),:);
@@ -106,15 +107,29 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         pos = LGObj.thorcam.ste2pos(stereotaxicCoords);
         volt = LGObj.galvo.pos2v(pos);
+        
+        ROW.delay_getCoords = toc;
+        
         LGObj.galvo.moveNow(volt);
         
-        if laserType>1 %If laser ON
+        ROW.delay_moveGalvo = toc;
+        
+        if laserType>0 %If laser ON
             laserFrequency = 40;
             laserVolt = laserPower;
             laserV = LGObj.laser.generateWaveform('truncatedCos',laserFrequency,laserVolt,10,[]);
-                    
+            
+            ROW.delay_preallocLaserWaveform = toc;
+            
             disp(['laser ON voltage=: ' num2str(laserPower)]);
             LGObj.laser.issueWaveform(laserV);
+            
+            ROW.delay_issueLaser = toc;
+            
+            %Display coordinate on video feed
+            LGObj.thorcam.vidHighlight = stereotaxicCoords;
+            
+            ROW.delay_vidHighlight = toc;
         end
         
                 
@@ -124,14 +139,14 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         disp(['galvo scan Stereotaxic: ' num2str(stereotaxicCoords(1,1)) ',' num2str(stereotaxicCoords(1,2)) ' & ' num2str(stereotaxicCoords(2,1)) ',' num2str(stereotaxicCoords(2,2))]);
 
-        if laserType> 1 %Laser on for ONE location (the first one in the list)
+        if laserType> 0 %Laser on for ONE location (the first one in the list)
             laserVolt = laserPower;
 
-            if laserType == 2
+            if laserType == 1
                 disp(['laser ON at 1st site. volt=' num2str(laserPower)]);
                 LGObj.scan('onesite',pos,5,laserVolt);
                 
-            elseif laserType == 3
+            elseif laserType == 2
                 disp(['laser ON at both sites. volt=' num2str(laserPower)]);
                 LGObj.scan('multisite',pos,5,laserVolt);
             end
@@ -142,6 +157,16 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     
     end
     toc;
+    
+    %Save these details to a log
+%     ROW = struct;
+    ROW.trialNum = trialNum;
+    ROW.laserType = laserType;
+    ROW.galvoPos = galvoPos;
+    ROW.galvoType = galvoType;
+    ROW.laserPower = laserPower;
+    ROW.tictoc = toc;
+    LGObj.appendToLog(ROW);
 
 elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.galvoAndLaserEnd'))
     disp('GALVO AND LASER OFF');
@@ -153,6 +178,9 @@ elseif iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentEnded')
     %Remove triggers
     LGObj.galvo.removeTrigger;
     LGObj.laser.removeTrigger;
+    
+    %Save log 
+    LGObj.saveLog;
 end
 
 end

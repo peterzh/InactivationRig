@@ -19,6 +19,7 @@ classdef ThorCamController < handle
         vidAx;
         vidTimer;
         vidCustomCoords;
+        vidHighlight=[]; %Highlighted coordinates
         showGrid = 1;
         
         vidState='high'; %low gain or high gain
@@ -411,13 +412,24 @@ classdef ThorCamController < handle
                 ste = [ste; -ste(:,1) ste(:,2)];
                 pos = obj.ste2pos(ste);
                 pix = obj.pos2pix(pos);
-
                 pix_x = pix(:,1); pix_y = pix(:,2);
-%                 pix_x = reshape(pix_x,size(obj.vidCustomCoords,1),size(obj.vidCustomCoords,1));
-%                 pix_y = reshape(pix_y,size(obj.vidCustomCoords,1),size(obj.vidCustomCoords,1));
+                
+                %also add blue cross at bregma
+                posB = obj.ste2pos([0 0]);
+                pixB = obj.pos2pix(posB);
                 hold(obj.vidAx,'on');
                 plot(obj.vidAx,pix_x,pix_y,'bo');
                 plot(obj.vidAx,pix_x',pix_y','bo');
+                plot(obj.vidAx,pixB(1),pixB(2)','b+');
+                
+                
+               %Also add highlighted point if exists
+               if ~isempty(obj.vidHighlight)
+                   posH = obj.ste2pos(obj.vidHighlight);
+                   pixH = obj.pos2pix(posH);
+                   plot(obj.vidAx,pixH(:,1),pixH(:,2)','w+');
+               end
+                
                 hold(obj.vidAx,'off');
             end
             
