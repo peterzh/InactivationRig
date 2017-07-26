@@ -60,14 +60,20 @@ classdef LaserController < handle
 
                     %Truncate at output level
                     volt(volt<cutOff) = 0;
+                case 'square'
+                    volt = -0.5*amplitudeVoltage*square(2*pi*frequency*t) + 0.5*amplitudeVoltage;
             end
             
             volt(end)=0;
         end
 
         function issueWaveform(obj,V_IN)
+%             disp('STARTING ISSUING WAVEFORM');
             obj.daqSession.queueOutputData(V_IN);
+%             disp('QUEUED DATA');
             obj.daqSession.startBackground;
+%             disp('STARTED BACKGROUND');
+
         end
         
         function registerTrigger(obj,pinID) %Any issued waveforms will wait for an input from this trigger
@@ -123,7 +129,7 @@ classdef LaserController < handle
         
         function stop(obj)
             obj.daqSession.stop;
-            obj.daqSession.outputSingleScan(0); %Turn laser off
+            obj.daqSession.outputSingleScan(0);
         end
         
         function delete(obj)

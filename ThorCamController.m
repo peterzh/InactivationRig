@@ -19,9 +19,10 @@ classdef ThorCamController < handle
         vidAx;
         vidTimer;
         vidCustomCoords;
+        vidHighlight=[]; %Highlighted coordinates
         showGrid = 1;
-        
-        vidState='high'; %low gain or high gain
+        vidColor=[1 0 0];
+        vidState; %low gain or high gain
     end
     
     methods
@@ -65,6 +66,10 @@ classdef ThorCamController < handle
             catch
                 disp('did not load pix2pos calibration');
             end
+            
+            obj.setExposure(100);
+            obj.setGain(100);
+            obj.vidState = 'high';
         end
         
         function videoFigure(obj)
@@ -75,7 +80,7 @@ classdef ThorCamController < handle
             obj.vidAx = gca;
             obj.vidTimer = timer;
             obj.vidTimer.TimerFcn=@(tHandle,tEvents)(obj.timercallback);
-            obj.vidTimer.Period = 0.2;
+            obj.vidTimer.Period = 0.5;
             obj.vidTimer.TasksToExecute = Inf;
             obj.vidTimer.ExecutionMode = 'fixedRate';
             start(obj.vidTimer);
@@ -122,6 +127,8 @@ classdef ThorCamController < handle
             stop(obj.vidTimer);
             obj.vidTimer.Period = period;
             start(obj.vidTimer);
+            
+            warning('High update rate causes CPU load');
         end
         
         function setExposure(obj,exposure)
@@ -132,17 +139,21 @@ classdef ThorCamController < handle
             [~,ex]=obj.camObj.Timing.Exposure.Get;
         end
         
-        function pos = getStimPos(obj,mode) %locate position of dot 
+        function pos = getStimPos(obj,mode,Laser) %locate position of dot 
             img = obj.getFrame;
             pix=nan(1,2); 
-            
             switch(mode)
                 case 'manual'
                     f=figure;
                     ax = axes('Parent',f); axis equal;
-                    image(img,'Parent',ax);
+                    image(img,'Parent',ax); colormap jet;
                     title('Select position');
+                    if exist('Laser', 'var')
+                        Laser.daqSession.outputSingleScan(0);
+                    end
+                    stop(obj.vidTimer);
                     [pix(1),pix(2)]=ginput(1);
+                    start(obj.vidTimer);
                     close(f);
 
                 case 'auto'
@@ -229,7 +240,11 @@ classdef ThorCamController < handle
             
         end
         
-        function toggleCamera(obj)
+        function toggleCamera(obj, vidLevel)
+            oldVidState = obj.vidState;
+            if exist('vidLevel', 'var')
+                obj.vidState = 'custom';
+            end
             switch (obj.vidState)
                 case 'low'
                     obj.setExposure(100);
@@ -239,6 +254,10 @@ classdef ThorCamController < handle
                     obj.setExposure(1);
                     obj.setGain(1);
                     obj.vidState = 'low';
+                case 'custom'
+                    obj.setExposure(vidLevel);
+                    obj.setGain(vidLevel);
+                    obj.vidState = oldVidState;
             end
         end
         
@@ -266,21 +285,35 @@ classdef ThorCamController < handle
             if isempty(obj.pix2pos_transform)
                 error('Need to do pix2pos calibration')
             end
-            disp('SELECT BREGMA');
-            bregmaPos = obj.getStimPos('manual');
+            disp('SELECT BREGMA THEN LAMBDA');
             
-            disp('SELECT LAMBDA');
-            lambdaPos = obj.getStimPos('manual');
             
-            %define norm vector pointing along the midline
+            
+            img = obj.getFrame;
+            stop(obj.vidTimer);
+            pix=nan(1,2);
+            
+            f=figure;
+            ax = axes('Parent',f); axis equal;
+            image(img,'Parent',ax); colormap jet; hold on;
+            
+            title('Select Bregma');
+            [pix(1),pix(2)]=ginput(1);
+            plot(pix(1),pix(2),'ro');
+            bregmaPos = obj.pix2pos(pix);
+            
+            title('Select Lambda');
+            [pix(1),pix(2)]=ginput(1);
+            plot(pix(1),pix(2),'ro');
+            lambdaPos = obj.pix2pos(pix);
+            
+            close(f);
+            start(obj.vidTimer);
+
+            %define norm vector pointinwg along the midline
             delta = bregmaPos-lambdaPos; 
             delta = delta/norm(delta);
-%             
-%             [~, ~, obj.pos2ste_transform] = procrustes([0 0; 0 -1], [bregmaPos; bregmaPos-delta],'Scaling',false,'Reflection',false);
-%             [~, ~, obj.ste2pos_transform] = procrustes([bregmaPos-delta; delta],[0 0; 0 -1],'Scaling',false,'Reflection',false);
-%             obj.pos2ste_transform.c = mean(obj.pos2ste_transform.c,1);
-%             obj.ste2pos_transform.c = mean(obj.ste2pos_transform.c,1);
-            
+
             %compute UNSIGNED angle of the midline vector compared to the Y axis
             angle_to_Yaxis = acos( dot(delta,[0 1])/norm(delta) );
             
@@ -323,6 +356,7 @@ classdef ThorCamController < handle
             pix = obj.pos2pix(pos);
             plot(pix(:,1),pix(:,2),'go');
             
+            
         end
         
         function pos=pix2pos(obj,pix)
@@ -364,12 +398,12 @@ classdef ThorCamController < handle
             image(img,'Parent',obj.vidAx);
             set(obj.vidAx,'XLimMode','manual','YLimMode','manual','DataAspectRatio',[1 1 1],'PlotBoxAspectRatio',[3 4 4]);
             if obj.isCapturing == 1
-                set(get(obj.vidAx,'parent'),'color','g');
+                set(get(obj.vidAx,'parent'),'color',obj.vidColor);
                 title(obj.vidAx,{['update rate: ' num2str(1/obj.vidTimer.AveragePeriod)],...
                                  ['gain: ' num2str(obj.getGain)],...
                                  ['exposure: ' num2str(obj.getExposure)]});
             else
-                set(get(obj.vidAx,'parent'),'color','r')
+                set(get(obj.vidAx,'parent'),'color','w')
             end
             
 %             %if pix2pos calibration done, overlay real position grid
@@ -411,13 +445,37 @@ classdef ThorCamController < handle
                 ste = [ste; -ste(:,1) ste(:,2)];
                 pos = obj.ste2pos(ste);
                 pix = obj.pos2pix(pos);
-
                 pix_x = pix(:,1); pix_y = pix(:,2);
-%                 pix_x = reshape(pix_x,size(obj.vidCustomCoords,1),size(obj.vidCustomCoords,1));
-%                 pix_y = reshape(pix_y,size(obj.vidCustomCoords,1),size(obj.vidCustomCoords,1));
+                
+                %also add blue cross at bregma
+                posB = obj.ste2pos([0 0]);
+                pixB = obj.pos2pix(posB);
                 hold(obj.vidAx,'on');
                 plot(obj.vidAx,pix_x,pix_y,'bo');
                 plot(obj.vidAx,pix_x',pix_y','bo');
+                plot(obj.vidAx,pixB(1),pixB(2)','b+');
+                
+                
+                %Also add highlighted point if exists
+                if ~isempty(obj.vidHighlight) && size(obj.vidHighlight,2)~=3
+                    for z = 1:size(obj.vidHighlight, 1)
+                        posH = obj.ste2pos(obj.vidHighlight(z,:));
+                        pixH = obj.pos2pix(posH);
+                        if z == 1
+                            plot(obj.vidAx,pixH(:,1),pixH(:,2)','r+');
+                        elseif z == 2
+                            plot(obj.vidAx,pixH(:,1),pixH(:,2)','r^');
+                        end
+                    end
+                end
+                
+                hold(obj.vidAx,'off');
+            end
+            
+            if ~isempty(obj.vidHighlight) && size(obj.vidHighlight,2)==3
+                pixH = obj.pos2pix(obj.vidHighlight(1:2));
+                hold(obj.vidAx,'on');
+                plot(obj.vidAx,pixH(:,1),pixH(:,2)','+r');
                 hold(obj.vidAx,'off');
             end
             
