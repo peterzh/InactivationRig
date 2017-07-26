@@ -17,6 +17,7 @@ function laserGalvoExpt_callback(eventObj, LGObj)
 if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experiment started
     expRef = eventObj.Ref;
 <<<<<<< HEAD
+<<<<<<< HEAD
     disp(['Starting Experiment: ' expRef]);
     %START LOG FILE
     LGObj.log = []; LGObj.filepath = [];
@@ -24,10 +25,15 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
     
     LGObj.galvoCoords = [];
 =======
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     disp(['STARTED EXPERIMENT: ' expRef]);
     %START LOG FILE
     LGObj.log = []; LGObj.filepath = [];
     LGObj.filepath = [dat.expPath(expRef, 'expInfo', 'm') '\' expRef '_galvoLog.mat'];
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     
     %Start galvo rates
@@ -70,6 +76,9 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
 <<<<<<< HEAD
 =======
     LGObj.stop;
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     LGObj.thorcam.vidHighlight = [];
     
@@ -105,10 +114,13 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     ROW = struct;
     ROW.delay_readVar = toc;
 <<<<<<< HEAD
+<<<<<<< HEAD
     tic;
     
     fprintf(['%03d) '], trialNum);
 =======
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     
     disp('--');
     disp(['trialNum: ' num2str(trialNum)]);
@@ -116,6 +128,9 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
 %     disp(['laserType: ' num2str(laserType)]);
 %     disp(['galvoPos: ' num2str(galvoPos)]);
 
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
     
@@ -131,7 +146,10 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         ROW.delay_getCoords = toc;
 <<<<<<< HEAD
+<<<<<<< HEAD
         tic;
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
 =======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
         
@@ -139,11 +157,14 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         ROW.delay_moveGalvo = toc;
 <<<<<<< HEAD
+<<<<<<< HEAD
         tic;
         
         ROW.delay_preallocLaserWaveform = NaN;
         ROW.delay_issueLaser = NaN;
         ROW.delay_vidHighlight = NaN;
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
 =======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
         
@@ -182,6 +203,9 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
             LGObj.laser.issueWaveform(laserV);
             
             ROW.delay_issueLaser = toc;
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
             
             %Display coordinate on video feed
@@ -189,9 +213,12 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
             
             ROW.delay_vidHighlight = toc;
 <<<<<<< HEAD
+<<<<<<< HEAD
             tic;
             
 %             disp(['    delay_vidHighlight: ' num2str(ROW.delay_vidHighlight)]);
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
 =======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
         end
@@ -211,11 +238,15 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
 =======
         disp(['galvo scan Stereotaxic: ' num2str(stereotaxicCoords(1,1)) ',' num2str(stereotaxicCoords(1,2)) ' & ' num2str(stereotaxicCoords(2,1)) ',' num2str(stereotaxicCoords(2,2))]);
 
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
         if laserType> 0 %Laser on for ONE location (the first one in the list)
             laserVolt = laserPower;
 
             if laserType == 1
+<<<<<<< HEAD
 <<<<<<< HEAD
                 fprintf(['<strong>%+0.1fML %+0.1fAP</strong> <-> %+0.1fML %+0.1fAP '], stereotaxicCoords(1,1), stereotaxicCoords(1,2), stereotaxicCoords(2,1), stereotaxicCoords(2,2));
                 LGObj.scan('onesite',pos,laserDuration,laserVolt);
@@ -229,6 +260,8 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
                 ROW.delay_issueLaser = toc;
                 tic;
 =======
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
                 disp(['laser ON at 1st site. volt=' num2str(laserPower)]);
                 LGObj.scan('onesite',pos,5,laserVolt);
                 
@@ -260,12 +293,16 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     
     %Save these details to a log
 %     ROW = struct;
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     ROW.trialNum = trialNum;
     ROW.laserType = laserType;
     ROW.galvoPos = galvoPos;
     ROW.galvoType = galvoType;
     ROW.laserPower = laserPower;
+<<<<<<< HEAD
 <<<<<<< HEAD
     ROW.tictoc = toc(allT);
 %     disp(['    total time: ' num2str(ROW.tictoc)]);
@@ -278,6 +315,8 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
 %     off_time = toc;
 %     fprintf('OFF (%0.2fs)\n',off_time);
 =======
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
     ROW.tictoc = toc;
     LGObj.appendToLog(ROW);
 
@@ -296,12 +335,15 @@ elseif iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentEnded')
     %Save log 
     LGObj.saveLog;
 <<<<<<< HEAD
+<<<<<<< HEAD
     
     %Return thorcam update rate to 2Hz
     LGObj.thorcam.setUpdateRate(2);
     LGObj.thorcam.vidColor = [1 0 0];
     
     fprintf('Experiment Ended.\n');
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
 =======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
 end

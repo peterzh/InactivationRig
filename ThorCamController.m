@@ -457,6 +457,7 @@ classdef ThorCamController < handle
                 
                 
 <<<<<<< HEAD
+<<<<<<< HEAD
                 %Also add highlighted point if exists
                 if ~isempty(obj.vidHighlight) && size(obj.vidHighlight,2)~=3
                     for z = 1:size(obj.vidHighlight, 1)
@@ -478,6 +479,8 @@ classdef ThorCamController < handle
                 hold(obj.vidAx,'on');
                 plot(obj.vidAx,pixH(:,1),pixH(:,2)','+r');
 =======
+=======
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
                %Also add highlighted point if exists
                if ~isempty(obj.vidHighlight)
                    posH = obj.ste2pos(obj.vidHighlight);
@@ -485,6 +488,9 @@ classdef ThorCamController < handle
                    plot(obj.vidAx,pixH(:,1),pixH(:,2)','w+');
                end
                 
+<<<<<<< HEAD
+>>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
+=======
 >>>>>>> 1e44d8c63d3ce6453c296ddf30678fd5fe46fe70
                 hold(obj.vidAx,'off');
             end
