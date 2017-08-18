@@ -1,6 +1,6 @@
 classdef GalvoController < handle
     properties
-        device;
+        galvoCfg;
         daqSession;
         AO0; %analogue out channel 0
         AO1; %analogue out channel 1
@@ -9,13 +9,13 @@ classdef GalvoController < handle
     
     methods
         
-        function obj = GalvoController(device)
+        function obj = GalvoController(galvoCfg)
+            obj.galvoCfg = galvoCfg;
             obj.daqSession = daq.createSession('ni');
-            obj.device = device;
             
             try
-                obj.AO0 = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
-                obj.AO1 = obj.daqSession.addAnalogOutputChannel(device, 1, 'Voltage');
+                obj.AO0 = obj.daqSession.addAnalogOutputChannel(obj.galvoCfg.device, 0, 'Voltage');
+                obj.AO1 = obj.daqSession.addAnalogOutputChannel(obj.galvoCfg.device, 1, 'Voltage');
             catch
                 warning(['GalvoController failed to initialise on ' device])
             end
@@ -56,7 +56,7 @@ classdef GalvoController < handle
                 
                 %Use camera to determine the real position of the laser
                 %dot. Camera must be calibrated already
-                pause(0.5); %allow time for laser to move and new image to enter camera memory
+                pause(1); %allow time for laser to move and new image to enter camera memory
                 pos(p,:) = ThorCam.getStimPos('manual');
             end
             
@@ -65,9 +65,7 @@ classdef GalvoController < handle
             
             pos2volt_transform = obj.pos2volt_transform;
             
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_POS-VOLT.mat');
-            save(filename,'pos2volt_transform');
+            save(obj.galvoCfg.calibFile,'pos2volt_transform');
         end
         
         function calibPOS2VOLTAGEWithMouse(obj,ThorCam, Laser)
@@ -110,7 +108,7 @@ classdef GalvoController < handle
                 ThorCam.vidHighlight = [testPos(p,:), 1];
                 v = obj.pos2v(testPos(p,:));
                 obj.moveNow(v);
-                Laser.daqSession.outputSingleScan(1.5);
+                Laser.daqSession.outputSingleScan(1.3);
                 %Use camera to determine the real position of the laser
                 %dot. Camera must be calibrated already
                 pause(0.5); %allow time for laser to move and new image to enter camera memory
@@ -125,9 +123,7 @@ classdef GalvoController < handle
             ThorCam.vidHighlight = [0 0];
             ThorCam.toggleCamera(100)
             %%
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_POS-VOLT.mat');
-            save(filename,'pos2volt_transform');
+            save(obj.galvoCfg.calibFile,'pos2volt_transform');
             pause(1);
         end
         
@@ -175,9 +171,7 @@ classdef GalvoController < handle
         end
         
         function loadcalibPOS2VOLT(obj)
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_POS-VOLT.mat');
-            t = load(filename);
+            t = load(obj.galvoCfg.calibFile);
             obj.pos2volt_transform = t.pos2volt_transform;
         end
         

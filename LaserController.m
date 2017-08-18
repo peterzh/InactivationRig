@@ -2,19 +2,19 @@ classdef LaserController < handle
     %Code which handles a laser output, connected to AO0 channel on a NIDAQ
     %board. 
     properties
-        device;
+        laserCfg;
         daqSession;
         AO0;
-        
-        volt2laserPower_transform;
+
+        volt2laserPower;
     end
     
     methods
-        function obj = LaserController(device)
-            obj.device = device;
+        function obj = LaserController(laserCfg)
+            obj.laserCfg = laserCfg;
             obj.daqSession = daq.createSession('ni');
             try
-                obj.AO0 = obj.daqSession.addAnalogOutputChannel(device, 0, 'Voltage');
+                obj.AO0 = obj.daqSession.addAnalogOutputChannel(obj.laserCfg.device, obj.laserCfg.channel, 'Voltage');
             catch
                 warning(['LaserController failed to initialise on ' device])
             end
@@ -23,12 +23,18 @@ classdef LaserController < handle
             try
                 obj.loadcalibPOWER2VOLT; 
                 disp('Loaded power<->voltage calibration');
+                
+                t = obj.volt2laserPower;
+                figure;
+                plot(t.volts,t.power_40Hz,'ro-',t.volts,t.power_80HzHalf,'bo-'); ylabel('Power [mW]'); xlabel('Volts');
+                legend('40Hz without scanning galvo','80Hz with scanning galvo (40Hz per-site)');
+            
             catch
                 disp('did not load power<->voltage calibration');
             end
             
             %Set to zero output if not already
-            obj.daqSession.outputSingleScan(0);
+%             obj.daqSession.outputSingleScan(0);
         end
         
         function volt = generateWaveform(obj,type,frequency,amplitudeVoltage,totalTime,otherInfo)
@@ -84,47 +90,88 @@ classdef LaserController < handle
             obj.daqSession.removeConnection(1);
         end
         
-        function calibPOWER2VOLT(obj)
+        function calibPOWER2VOLT(obj,range)
             %Issues different voltages to the laser to calibrate the power,
             %requires manually inputting the laser power
             
-            volts = linspace(1,5,20)';
-            power = nan(size(volts));
+            volts = linspace(range(1),range(2),20)';
+            power_40Hz = nan(size(volts));
+            power_80HzHalf = nan(size(volts));
             
-            for i = 1:length(volts)
+            t = table(volts,power_40Hz,power_80HzHalf);
+            
+            for i = 1:length(t.volts)
                 %Set laser power
 %                 obj.daqSession.outputSingleScan(volts(i));
                 
-                laserV = obj.generateWaveform('trunacedCosHalf',80,volts(i),5,2);
+                laserV = obj.generateWaveform('truncatedCos',40,t.volts(i),10,[]);
                 obj.issueWaveform(laserV);
                 
-                power(i) = input('Power [mW]:');
+                t.power_40Hz(i) = input('Power [mW]:');
+                obj.stop;
             end
-            volt2laserPower = fit(volts,power,'linearinterp');
             
+            for i = 1:length(t.volts)
+                laserV = obj.generateWaveform('truncatedCosHalf',80,t.volts(i),10,2);
+                obj.issueWaveform(laserV);
+                
+                t.power_80HzHalf(i) = input('Power [mW]:');
+                obj.stop;
+                                    
+            end
+            
+                        
             figure;
-            plot(volt2laserPower,volts,power,'o'); ylabel('Power [mW]'); xlabel('Volts');
+            plot(t.volts,t.power_40Hz,'ro-',t.volts,t.power_80HzHalf,'bo-'); ylabel('Power [mW]'); xlabel('Volts');
+            legend('40Hz without scanning galvo','80Hz with scanning galvo (40Hz per-site)');
 
-            obj.volt2laserPower_transform = volt2laserPower;
+            %Trim the values where power is zero
+%             idx = t.power_40Hz==0 | t.power_80HzHalf ==0;
             
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_VOLT-LPOWER.mat');
-            save(filename,'volt2laserPower');
+%             volts(power==0)=[];
+%             power(power==0)=[];
+
+%             if any(diff(power) < 0)
+%                 error('Not monotonically increasing power');
+%             end
+%             
+            volt2laserPower = t;
+            save(obj.laserCfg.calibFile,'volt2laserPower');
+            obj.volt2laserPower = volt2laserPower;
         end
         
         function loadcalibPOWER2VOLT(obj)
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_VOLT-LPOWER.mat');
-            t = load(filename);
-            obj.volt2laserPower_transform = t.laserPower2volt;
+            t = load(obj.laserCfg.calibFile);
+            obj.volt2laserPower = t.volt2laserPower;
         end
         
-        function v = power2volt(obj,power)
-            if isempty(obj.laserPower2volt_transform)
+        function v = power2volt(obj,desiredPower,type)
+            if isempty(obj.volt2laserPower)
                 error('Need to calibrate laser power to voltage');
             end
             
-            v = obj.laserPower2volt_transform*power; %TO DO
+            volts = obj.volt2laserPower.volts;
+            
+            switch(type)
+                case '40Hz'
+                    power = obj.volt2laserPower.power_40Hz;
+                case '80HzHalf'
+                    power = obj.volt2laserPower.power_80HzHalf;
+                otherwise
+                    error('unspecified');
+            end
+            
+            %Trim away zero power
+            idx = power==0;
+            volts(idx)=[];
+            power(idx)=[];
+            
+            if desiredPower > max(power)
+                error('power desired outside of calibrated range');
+            end
+            
+            %Local interpolation from the calibration data
+            v = interp1(power,volts,desiredPower);            
         end
         
         function stop(obj)

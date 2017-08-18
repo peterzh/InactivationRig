@@ -24,15 +24,16 @@ if iscell(eventObj.Data) && strcmp(eventObj.Data{2}, 'experimentInit') %Experime
     LGObj.galvoCoords = [];
     
     %Start galvo rates
-    LGObj.galvo.daqSession.Rate = 10e3;
-    LGObj.laser.daqSession.Rate = 10e3;
+    LGObj.galvo.daqSession.Rate = 5e3;
+    LGObj.laser.daqSession.Rate = 5e3;
     
     %Register triggers
-    LGObj.galvo.registerTrigger([LGObj.galvoDevice '/PFI0']);
-    LGObj.laser.registerTrigger([LGObj.laserDevice '/PFI0']);
+    LGObj.galvo.registerTrigger([LGObj.galvoCfg.device '/PFI0']);
+    LGObj.laser.registerTrigger([LGObj.laserCfg.device '/PFI0']);
 
     %Reduce camera update rate to 1.5Hz
-    LGObj.thorcam.setUpdateRate(1.5);
+    LGObj.thorcam.setUpdateRate(1);
+    
 % elseif isstruct(eventObj.Data) && ~any(strcmp({eventObj.Data.name},'events.buildWaveform')) 
 %     %If any variables in the eventObj field, update them
 %     names = {eventObj.Data.name};
@@ -95,6 +96,7 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
     ROW.delay_readVar = toc;
     tic;
     
+    fprintf('[%s] ', LGObj.rig);
     fprintf(['%03d) '], trialNum);
     stereotaxicCoords = LGObj.coordID2ste(LGObj.galvoCoords, galvoPos);
     
@@ -122,7 +124,8 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         if laserType>0 %If laser ON
             laserFrequency = 40;
-            laserVolt = laserPower;
+%             laserVolt = laserPower;
+            laserVolt = LGObj.laser.power2volt(laserPower, '40Hz');
             laserV = LGObj.laser.generateWaveform('truncatedCos',laserFrequency,laserVolt,laserDuration,[]);
             
             ROW.delay_preallocLaserWaveform = toc;
@@ -138,7 +141,7 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
             
             LGObj.laser.issueWaveform(laserV);
             fprintf(['<strong>%+0.1fML %+0.1fAP </strong>'], stereotaxicCoords(1), stereotaxicCoords(2));
-            fprintf(['%0.1fv '], laserPower);
+            fprintf(['%0.1fmW (%0.1fv) '], laserPower, laserVolt);
             fprintf('for %0.1fs',laserDuration);
             
             ROW.delay_issueLaser = toc;
@@ -167,7 +170,8 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         ROW.delay_issueLaser = NaN;
         ROW.delay_vidHighlight = NaN;
         if laserType> 0 %Laser on for ONE location (the first one in the list)
-            laserVolt = laserPower;
+%             laserVolt = laserPower;
+            laserVolt = LGObj.laser.power2volt(laserPower, '80HzHalf');
 
             if laserType == 1
                 fprintf(['<strong>%+0.1fML %+0.1fAP</strong> <-> %+0.1fML %+0.1fAP '], stereotaxicCoords(1,1), stereotaxicCoords(1,2), stereotaxicCoords(2,1), stereotaxicCoords(2,2));
@@ -183,7 +187,7 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
                 tic;
             end
             
-            fprintf(['%0.1fv '], laserPower);
+            fprintf(['%0.1fmW (%0.1fv) '], laserPower, laserVolt);
             fprintf('for %0.1fs',laserDuration);
 
             LGObj.thorcam.vidHighlight = stereotaxicCoords;

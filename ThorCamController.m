@@ -1,5 +1,7 @@
 classdef ThorCamController < handle
     properties
+        thorcamCfg;
+        
         camObj;
         ImageWidth;
         ImageHeight;
@@ -26,7 +28,8 @@ classdef ThorCamController < handle
     end
     
     methods
-        function obj = ThorCamController %Create and initialise camera
+        function obj = ThorCamController(thorcamCfg) %Create and initialise camera
+            obj.thorcamCfg = thorcamCfg;
             %Add NET assembly
             
             %Need to install the .dll file to the Global Assembly Cache
@@ -40,7 +43,7 @@ classdef ThorCamController < handle
             obj.camObj = uc480.Camera;
             
             %Initialise object addressed with ID ( default 0)
-            obj.camObj.Init(0)
+            obj.camObj.Init(obj.thorcamCfg.camID)
             
             %Set display mode
             obj.camObj.Display.Mode.Set(uc480.Defines.DisplayMode.Direct3D)
@@ -234,9 +237,7 @@ classdef ThorCamController < handle
             pix2pos_transform=obj.pix2pos_transform;
             pos2pix_transform=obj.pos2pix_transform;
 
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_PIX-POS.mat');
-            save(filename,'pix2pos_transform','pos2pix_transform');
+            save(obj.thorcamCfg.calibFile,'pix2pos_transform','pos2pix_transform');
             
         end
         
@@ -262,9 +263,7 @@ classdef ThorCamController < handle
         end
         
         function loadcalibPIX2POS(obj)
-            mfiledir = fileparts(mfilename('fullpath'));
-            filename = fullfile(mfiledir,'calib','calib_PIX-POS.mat');
-            t = load(filename);
+            t = load(obj.thorcamCfg.calibFile);
             
             obj.pix2pos_transform = t.pix2pos_transform;
             obj.pos2pix_transform = t.pos2pix_transform;
@@ -293,7 +292,7 @@ classdef ThorCamController < handle
             stop(obj.vidTimer);
             pix=nan(1,2);
             
-            f=figure;
+            f=figure('position',[100 100 1000 1000]);
             ax = axes('Parent',f); axis equal;
             image(img,'Parent',ax); colormap jet; hold on;
             

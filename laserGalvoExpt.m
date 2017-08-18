@@ -2,10 +2,12 @@ classdef laserGalvoExpt < handle
     %object which handles interfacing the galvo setup with MC
     
     properties
-        galvoDevice='Dev1';
-        laserDevice='Dev2';
-        monitorDevice='Dev2';
+        rig;
         
+        galvoCfg;
+        laserCfg;
+        thorcamCfg;
+
         thorcam;
         galvo;
         laser;
@@ -19,24 +21,62 @@ classdef laserGalvoExpt < handle
     end
     
     methods
-        function obj = laserGalvoExpt
+        function obj = laserGalvoExpt(rig)
+            obj.rig = rig;
+            if nargin < 1
+                error('Please enter rig name as first argument');
+            end
+            
+            switch(rig)
+                case 'zym2'
+                    obj.galvoCfg = struct;
+                    obj.galvoCfg.device = 'Dev1';
+                    obj.galvoCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_POS-VOLT.mat';
+                    
+                    obj.laserCfg = struct;
+                    obj.laserCfg.device = 'Dev2';
+                    obj.laserCfg.channel = 'ao0';
+                    obj.laserCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_VOLT-LPOWER.mat';
+                    
+                    obj.thorcamCfg = struct;
+                    obj.thorcamCfg.camID = 1;
+                    obj.thorcamCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_PIX-POS.mat';
+                    
+                case 'zym1'
+                    obj.galvoCfg = struct;
+                    obj.galvoCfg.device = 'Dev4';
+                    obj.galvoCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_POS-VOLT.mat';
+                    
+                    obj.laserCfg = struct;
+                    obj.laserCfg.device = 'Dev3';
+                    obj.laserCfg.channel = 'ao0';
+                    obj.laserCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_VOLT-LPOWER.mat';
+                    
+                    obj.thorcamCfg = struct;
+                    obj.thorcamCfg.camID = 2;
+                    obj.thorcamCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_PIX-POS.mat';
+          
+                otherwise
+                    error('Invalid selection');
+            end
             
             %Get camera object
-            obj.thorcam = ThorCamController;
+            obj.thorcam = ThorCamController(obj.thorcamCfg);
+            set(get(obj.thorcam.vidAx,'parent'),'name',obj.rig);
             
             %Get galvo controller object
-            obj.galvo = GalvoController(obj.galvoDevice);
+            obj.galvo = GalvoController(obj.galvoCfg);
             
             %Get laser controller object
-            obj.laser = LaserController(obj.laserDevice);
+            obj.laser = LaserController(obj.laserCfg);
             
             %Setup monitor channels
-            obj.monitor = MonitorController(obj.monitorDevice);
+%             obj.monitor = MonitorController(obj.monitorDevice);
             
             %Set equal rates
-            obj.galvo.daqSession.Rate = 20e3;
-            obj.laser.daqSession.Rate = 20e3;
-            obj.monitor.daqSession.Rate = 20e3;
+            obj.galvo.daqSession.Rate = 5e3;
+            obj.laser.daqSession.Rate = 5e3;
+            obj.monitor.daqSession.Rate = 5e3;
             
             disp('Please run stereotaxic calibration, then register listener');
         end
@@ -73,7 +113,7 @@ classdef laserGalvoExpt < handle
                 obj.galvo.moveNow(obj.galvo.pos2v(pos));
                 disp(['X=' num2str(pos(1)) ' Y=' num2str(pos(2))]);
                 
-                pause(0.5);
+                pause(1);
             end
             
             
@@ -110,8 +150,8 @@ classdef laserGalvoExpt < handle
             %             numEle = obj.galvo.daqSession.Rate*galvo_laser_delay;
             %             galvoV = circshift(galvoV,numEle);
             
-            rate = obj.galvo.daqSession.Rate;
-            t = 0:(1/rate):totalTime; t(1)=[];
+%             rate = obj.galvo.daqSession.Rate;
+%             t = 0:(1/rate):totalTime; t(1)=[];
             %             f=figure;
             %             plot(t,galvoV,t,laserV); xlim([0 0.1]);
             
@@ -239,7 +279,7 @@ classdef laserGalvoExpt < handle
         
         function registerListener(obj)
             %Connect to expServer, registering a callback function
-            s = srv.StimulusControl.create('zym2');
+            s = srv.StimulusControl.create(obj.rig);
             s.connect(true);
             anonListen = @(srcObj, eventObj) laserGalvoExpt_callback(eventObj, obj);
             addlistener(s, 'ExpUpdate', anonListen);
