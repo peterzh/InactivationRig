@@ -2,51 +2,93 @@ classdef laserGalvoExpt < handle
     %object which handles interfacing the galvo setup with MC
     
     properties
-        galvoDevice='Dev1';
-        laserDevice='Dev2';
-        %         monitorDevice='Dev2';
+        rig;
         
+        galvoCfg;
+        laserCfg;
+        thorcamCfg;
+
         thorcam;
         galvo;
         laser;
-        %         monitor;
+        monitor;
         
         expServerObj;
         galvoCoords;
         
-        mode;
-        mouseName;
-        expNum;
-        expDate;
         log;
         filepath;
     end
     
     methods
-        function obj = laserGalvoExpt
+        function obj = laserGalvoExpt(rig)
+            obj.rig = rig;
+            if nargin < 1
+                error('Please enter rig name as first argument');
+            end
+            
+            switch(rig)
+                case 'zym2'
+                    obj.galvoCfg = struct;
+                    obj.galvoCfg.device = 'Dev1';
+                    obj.galvoCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_POS-VOLT.mat';
+                    
+                    obj.laserCfg = struct;
+                    obj.laserCfg.device = 'Dev2';
+                    obj.laserCfg.channel = 'ao0';
+                    obj.laserCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_VOLT-LPOWER.mat';
+                    
+                    obj.thorcamCfg = struct;
+                    obj.thorcamCfg.camID = 1;
+                    obj.thorcamCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_PIX-POS.mat';
+                    
+                case 'zym1'
+                    obj.galvoCfg = struct;
+                    obj.galvoCfg.device = 'Dev4';
+                    obj.galvoCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_POS-VOLT.mat';
+                    
+                    obj.laserCfg = struct;
+                    obj.laserCfg.device = 'Dev3';
+                    obj.laserCfg.channel = 'ao0';
+                    obj.laserCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_VOLT-LPOWER.mat';
+                    
+                    obj.thorcamCfg = struct;
+                    obj.thorcamCfg.camID = 2;
+                    obj.thorcamCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_PIX-POS.mat';
+          
+                otherwise
+                    error('Invalid selection');
+            end
             
             %Get camera object
-            obj.thorcam = ThorCamController;
+            obj.thorcam = ThorCamController(obj.thorcamCfg);
+            set(get(obj.thorcam.vidAx,'parent'),'name',obj.rig);
             
             %Get galvo controller object
-            obj.galvo = GalvoController(obj.galvoDevice);
+            obj.galvo = GalvoController(obj.galvoCfg);
             
             %Get laser controller object
-            obj.laser = LaserController(obj.laserDevice);
+            obj.laser = LaserController(obj.laserCfg);
             
             %Setup monitor channels
-            %             obj.monitor = MonitorController(obj.monitorDevice);
+%             obj.monitor = MonitorController(obj.monitorDevice);
             
             %Set equal rates
-            obj.galvo.daqSession.Rate = 30e3;
-            obj.laser.daqSession.Rate = 30e3;
-            %             obj.monitor.daqSession.Rate = 30e3;
+            obj.galvo.daqSession.Rate = 5e3;
+            obj.laser.daqSession.Rate = 5e3;
+            obj.monitor.daqSession.Rate = 5e3;
             
             disp('Please run stereotaxic calibration, then register listener');
         end
         
         function calibStereotaxic(obj)
             obj.thorcam.calibPIX2STE;
+            load 26CoordSet;
+            obj.thorcam.vidCustomCoords = coordSet;
+        end
+        
+        function calibCameraWithMouse(obj)
+                obj.galvo.calibPOS2VOLTAGEWithMouse(obj.thorcam, obj.laser);
         end
         
         function calibVoltages(obj)
@@ -71,7 +113,7 @@ classdef laserGalvoExpt < handle
                 obj.galvo.moveNow(obj.galvo.pos2v(pos));
                 disp(['X=' num2str(pos(1)) ' Y=' num2str(pos(2))]);
                 
-                pause(0.5);
+                pause(1);
             end
             
             
@@ -108,8 +150,8 @@ classdef laserGalvoExpt < handle
             %             numEle = obj.galvo.daqSession.Rate*galvo_laser_delay;
             %             galvoV = circshift(galvoV,numEle);
             
-            rate = obj.galvo.daqSession.Rate;
-            t = 0:(1/rate):totalTime; t(1)=[];
+%             rate = obj.galvo.daqSession.Rate;
+%             t = 0:(1/rate):totalTime; t(1)=[];
             %             f=figure;
             %             plot(t,galvoV,t,laserV); xlim([0 0.1]);
             
@@ -144,7 +186,7 @@ classdef laserGalvoExpt < handle
             %Register the trigger for galvo and LEDs to start together
             obj.galvo.registerTrigger([obj.galvoDevice '/PFI0']);
             obj.laser.registerTrigger([obj.laserDevice '/PFI0']);
-            %             obj.monitor.registerTrigger([obj.monitorDevice '/PFI0']);
+            obj.monitor.registerTrigger([obj.monitorDevice '/PFI0']);
             disp('registered triggers');
             
             %shift galvo waveform to ensure galvos move slightly earlier
@@ -163,30 +205,67 @@ classdef laserGalvoExpt < handle
             obj.galvo.issueWaveform(galvoV);
             obj.laser.issueWaveform(laserV);
             
-            %             obj.monitor.daqSession.DurationInSeconds = totalTime;
-            %             [data,time] = obj.monitor.daqSession.startForeground;
-            %             plot(time,data,'k-',time,laserV,'k:');
+                        obj.monitor.daqSession.DurationInSeconds = totalTime;
+                        [data,time] = obj.monitor.daqSession.startForeground;
+                        plot(1000*time,data,'k-',1000*time,laserV,'k:');
             
             obj.galvo.daqSession.wait;
             
             %             %Remove triggers
             obj.galvo.removeTrigger;
             obj.laser.removeTrigger;
-            %             obj.monitor.removeTrigger;
+            obj.monitor.removeTrigger;
             %             close(f);
             
         end
         
-        function diode(obj)
-            volts = round(linspace(1,5,8),1);
+        function diode(obj,type)
+            volts = round(linspace(3,5,3),1);
             figure('color','w');
             
             h = [];
             for v = 1:length(volts)
                 h(v) = subplot(length(volts),1,v);
-                obj.scanManual('onesite',[-3 0;3 0],0.1,volts(v));
+                
+                switch(type)
+                    case 'scan'
+                        obj.scanManual('onesite',[-3 0;3 0],0.1,volts(v));
+                    case 'laserOnly'
+                        laserFreq = 20;
+                        laserVolt = 5;
+                        totalTime = 0.5;
+                        
+                        laserV = obj.laser.generateWaveform('square',laserFreq,laserVolt,totalTime);
+                        
+                        %Register the trigger for laser and monitor
+                        obj.laser.registerTrigger([obj.laserDevice '/PFI0']);
+                        obj.monitor.registerTrigger([obj.monitorDevice '/PFI0']);
+                        disp('registered triggers');
+                        
+                        rate = obj.galvo.daqSession.Rate;
+                        t = 0:(1/rate):totalTime; t(1)=[];
+
+                        %issue voltage trace to analogue-out channels of galvo
+                        obj.laser.issueWaveform(laserV);
+                        
+                        obj.monitor.daqSession.DurationInSeconds = totalTime;
+                        [data,time] = obj.monitor.daqSession.startForeground;
+                        plot(time*1000,data,'k-',time*1000,laserV,'k:');
+                         obj.laser.daqSession.wait;                   
+                        %             %Remove triggers
+                        obj.laser.removeTrigger;
+                        obj.monitor.removeTrigger;
+                    case 'continuous'
+                        numSamples = 1000;
+                        data = nan(numSamples,1);
+                        for i = 1:numSamples
+                            data(i) = obj.monitor.daqSession.inputSingleScan;
+                            pause(0.1);
+                            plot(data);
+                        end
+                end
                 set(gca,'box','off');
-                ylim([0 10]);
+                %                 ylim([0 10]);
                 ylabel(num2str(volts(v)));
                 
                 if v < length(volts)
@@ -195,12 +274,12 @@ classdef laserGalvoExpt < handle
             end
             
             linkaxes(h,'xy');
-            xlabel('Time(sec)');
+            xlabel('Time(msec)');
         end
         
         function registerListener(obj)
             %Connect to expServer, registering a callback function
-            s = srv.StimulusControl.create('zym2');
+            s = srv.StimulusControl.create(obj.rig);
             s.connect(true);
             anonListen = @(srcObj, eventObj) laserGalvoExpt_callback(eventObj, obj);
             addlistener(s, 'ExpUpdate', anonListen);
@@ -217,9 +296,20 @@ classdef laserGalvoExpt < handle
             obj.galvo.stop;
         end
         
+        function appendToLog(obj,ROW)
+            if isempty(obj.log)
+                obj.log=ROW;
+            else
+                fields = fieldnames(obj.log);
+                for f = 1:length(fields)
+                    obj.log.(fields{f}) = [obj.log.(fields{f}); ROW.(fields{f})];
+                end
+            end
+        end
+        
         function saveLog(obj)
             log = obj.log;
-            save(obj.filePath, 'log');
+            save(obj.filepath, '-struct', 'log');
         end
         
         function ste = coordID2ste(obj,coordList,id)
@@ -231,6 +321,7 @@ classdef laserGalvoExpt < handle
             end
             
         end
+        
         
         function delete(obj)
             %             obj.thorcam.delete;
