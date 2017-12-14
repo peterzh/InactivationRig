@@ -18,6 +18,9 @@ classdef laserGalvoExpt < handle
         
         log;
         filepath;
+        
+        UDPService;
+        AlyxInstance;
     end
     
     methods
@@ -40,8 +43,10 @@ classdef laserGalvoExpt < handle
                     
                     obj.thorcamCfg = struct;
                     obj.thorcamCfg.camID = 1;
+                    obj.thorcamCfg.exposure = 100;
                     obj.thorcamCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym2_calib_PIX-POS.mat';
                     
+                    UDPListenPort = 10002;
                 case 'zym1'
                     obj.galvoCfg = struct;
                     obj.galvoCfg.device = 'Dev4';
@@ -54,8 +59,10 @@ classdef laserGalvoExpt < handle
                     
                     obj.thorcamCfg = struct;
                     obj.thorcamCfg.camID = 2;
+                    obj.thorcamCfg.exposure = 10;
                     obj.thorcamCfg.calibFile = 'C:\Users\Experiment\Documents\MATLAB\InactivationRig\calib\zym1_calib_PIX-POS.mat';
           
+                    UDPListenPort = 10001;
                 otherwise
                     error('Invalid selection');
             end
@@ -78,7 +85,20 @@ classdef laserGalvoExpt < handle
             obj.laser.daqSession.Rate = 5e3;
             obj.monitor.daqSession.Rate = 5e3;
             
+            %Create basicServices UDP listener to receive alyxInstance info
+            %from expServer
+            obj.UDPService = srv.BasicUDPService(rig);
+            obj.UDPService.ListenPort = UDPListenPort;
+            obj.UDPService.StartCallback = @obj.udpCallback;
+            obj.UDPService.bind;
+            
             disp('Please run stereotaxic calibration, then register listener');
+        end
+        
+        function udpCallback(obj,src,evt)
+            response = regexp(src.LastReceivedMessage,...
+                '(?<status>[A-Z]{4})(?<body>.*)\*(?<host>\w*)', 'names');
+            [~, obj.AlyxInstance] = dat.parseAlyxInstance(response.body);
         end
         
         function calibStereotaxic(obj)
@@ -310,6 +330,15 @@ classdef laserGalvoExpt < handle
         function saveLog(obj)
             log = obj.log;
             save(obj.filepath, '-struct', 'log');
+            
+            %If alyx instance available, register to database
+            if isempty(obj.AlyxInstance)
+                return;
+            end
+            
+            subsessionURL = obj.AlyxInstance.subsessionURL;
+            [dataset,filerecord] = alyx.registerFile2(obj.filepath, 'mat', subsessionURL, 'galvoLog', [], obj.AlyxInstance);
+            keyboard;
         end
         
         function ste = coordID2ste(obj,coordList,id)

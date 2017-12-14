@@ -1,3 +1,4 @@
+
 function laserGalvoExpt_callback(eventObj, LGObj)
 %callback function run by expServer, called with inputs:
     %eventObj: from expServer containing various information about a trial
@@ -124,9 +125,14 @@ elseif isstruct(eventObj.Data) && any(strcmp({eventObj.Data.name},'events.newTri
         
         if laserType>0 %If laser ON
             laserFrequency = 40;
-%             laserVolt = laserPower;
             laserVolt = LGObj.laser.power2volt(laserPower, '40Hz');
             laserV = LGObj.laser.generateWaveform('truncatedCos',laserFrequency,laserVolt,laserDuration,[]);
+            fprintf('40Hz sine ');
+% 
+%             laserVolt = LGObj.laser.power2volt(laserPower, 'DC');
+%             laserV = LGObj.laser.generateWaveform('DC',[],laserVolt,laserDuration,[]);
+%             fprintf('DC pulse ');
+            
             
             ROW.delay_preallocLaserWaveform = toc;
             tic;

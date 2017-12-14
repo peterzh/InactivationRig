@@ -56,7 +56,7 @@ classdef GalvoController < handle
                 
                 %Use camera to determine the real position of the laser
                 %dot. Camera must be calibrated already
-                pause(1); %allow time for laser to move and new image to enter camera memory
+                pause(2); %allow time for laser to move and new image to enter camera memory
                 pos(p,:) = ThorCam.getStimPos('manual');
             end
             

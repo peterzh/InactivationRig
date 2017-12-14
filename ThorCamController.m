@@ -60,7 +60,6 @@ classdef ThorCamController < handle
             
             %video feed
             obj.videoFigure;
-            obj.start;
             
             %try loading pix2pos calibration
             try
@@ -69,10 +68,7 @@ classdef ThorCamController < handle
             catch
                 disp('did not load pix2pos calibration');
             end
-            
-            obj.setExposure(100);
-            obj.setGain(100);
-            obj.vidState = 'high';
+           
         end
         
         function videoFigure(obj)
@@ -87,6 +83,12 @@ classdef ThorCamController < handle
             obj.vidTimer.TasksToExecute = Inf;
             obj.vidTimer.ExecutionMode = 'fixedRate';
             start(obj.vidTimer);
+            
+            obj.start; %Start capturing images in figure
+            
+            obj.setExposure(obj.thorcamCfg.exposure);
+            obj.setGain(100);
+            obj.vidState = 'high';
         end
         
         function start(obj)
@@ -147,7 +149,7 @@ classdef ThorCamController < handle
             pix=nan(1,2); 
             switch(mode)
                 case 'manual'
-                    f=figure;
+                    f=figure('position',[100 100 1000 1000]);
                     ax = axes('Parent',f); axis equal;
                     image(img,'Parent',ax); colormap jet;
                     title('Select position');
@@ -162,7 +164,7 @@ classdef ThorCamController < handle
                 case 'auto'
                     %auto detect ONE bright peak
                     s = regionprops(img>240,'centroid');
-                    f=figure; imshow(img); hold on;
+                    f=figure('position',[100 100 1000 1000]); imshow(img); hold on;
                     plot(s(end).Centroid(1),s(end).Centroid(2),'r+');
                     hold off;
                     

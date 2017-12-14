@@ -23,12 +23,6 @@ classdef LaserController < handle
             try
                 obj.loadcalibPOWER2VOLT; 
                 disp('Loaded power<->voltage calibration');
-                
-                t = obj.volt2laserPower;
-                figure;
-                plot(t.volts,t.power_40Hz,'ro-',t.volts,t.power_80HzHalf,'bo-'); ylabel('Power [mW]'); xlabel('Volts');
-                legend('40Hz without scanning galvo','80Hz with scanning galvo (40Hz per-site)');
-            
             catch
                 disp('did not load power<->voltage calibration');
             end
@@ -68,6 +62,9 @@ classdef LaserController < handle
                     volt(volt<cutOff) = 0;
                 case 'square'
                     volt = -0.5*amplitudeVoltage*square(2*pi*frequency*t) + 0.5*amplitudeVoltage;
+                    
+                case 'DC'
+                    volt = ones(length(t),1)*amplitudeVoltage;
             end
             
             volt(end)=0;
@@ -95,10 +92,19 @@ classdef LaserController < handle
             %requires manually inputting the laser power
             
             volts = linspace(range(1),range(2),20)';
+            power_DC = nan(size(volts));
             power_40Hz = nan(size(volts));
             power_80HzHalf = nan(size(volts));
             
-            t = table(volts,power_40Hz,power_80HzHalf);
+            t = table(volts,power_DC,power_40Hz,power_80HzHalf);
+            
+            for i = 1:length(t.volts)
+                laserV = obj.generateWaveform('DC',[],t.volts(i),10,[]);
+                obj.issueWaveform(laserV);
+                
+                t.power_DC(i) = input('Power [mW]:');
+                obj.stop;
+            end
             
             for i = 1:length(t.volts)
                 %Set laser power
@@ -116,15 +122,22 @@ classdef LaserController < handle
                 obj.issueWaveform(laserV);
                 
                 t.power_80HzHalf(i) = input('Power [mW]:');
-                obj.stop;
-                                    
+                obj.stop;                 
             end
-            
-                        
+                     
             figure;
-            plot(t.volts,t.power_40Hz,'ro-',t.volts,t.power_80HzHalf,'bo-'); ylabel('Power [mW]'); xlabel('Volts');
-            legend('40Hz without scanning galvo','80Hz with scanning galvo (40Hz per-site)');
+            plot(t.volts,t.power_DC,'ko-',t.volts,t.power_40Hz,'ro-',t.volts,t.power_80HzHalf,'bo-'); ylabel('Power [mW]'); xlabel('Volts');
+            legend('DC','40Hz without scanning galvo','80Hz with scanning galvo (40Hz per-site)');
 
+            %If any duplicate entries, manually trim away in calibration
+            tab0 = tabulate(t.power_DC);
+            tab1 = tabulate(t.power_40Hz);
+            tab2 = tabulate(t.power_80HzHalf);
+            
+            if any(tab0(:,2)>2) || any(tab1(:,2)>2) || any(tab2(:,2)>2)
+                warning('Duplicate power entries, please manually remove');
+                keyboard;
+            end
             %Trim the values where power is zero
 %             idx = t.power_40Hz==0 | t.power_80HzHalf ==0;
             
@@ -143,6 +156,18 @@ classdef LaserController < handle
         function loadcalibPOWER2VOLT(obj)
             t = load(obj.laserCfg.calibFile);
             obj.volt2laserPower = t.volt2laserPower;
+            
+            t = obj.volt2laserPower;
+            figure;
+            h0 = plot(t.volts,t.power_DC,'ko-',t.volts,t.power_40Hz,'ro-',t.volts,t.power_80HzHalf,'bo-'); ylabel('Power [mW]'); xlabel('Volts');
+            legend(h0,'DC','40Hz without scanning galvo','80Hz with scanning galvo (40Hz per-site)');
+%             hold on;
+%             h1 = line(get(gca,'xlim'),[1 1]*max(t.power_DC));
+%             set(h1,'LineStyle','--','Color','k');
+%             h2 = line(get(gca,'xlim'),[1 1]*max(t.power_40Hz));
+%             set(h2,'LineStyle','--','Color','r');
+%             h3 = line(get(gca,'xlim'),[1 1]*max(t.power_80HzHalf));
+%             set(h3,'LineStyle','--','Color','b');
         end
         
         function v = power2volt(obj,desiredPower,type)
@@ -153,6 +178,8 @@ classdef LaserController < handle
             volts = obj.volt2laserPower.volts;
             
             switch(type)
+                case 'DC'
+                    power = obj.volt2laserPower.power_DC;
                 case '40Hz'
                     power = obj.volt2laserPower.power_40Hz;
                 case '80HzHalf'
